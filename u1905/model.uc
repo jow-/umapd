@@ -15,6 +15,7 @@
  */
 
 const nl80211 = require('nl80211');
+const struct = require('struct');
 const rtnl = require('rtnl');
 const fs = require('fs');
 
@@ -85,6 +86,8 @@ const I1905LocalInterface = proto({
 			i1905sock.close();
 			return null;
 		}
+
+		log.info(`Using local interface ${ifname} (${i1905sock.address})`);
 
 		return proto({
 			al: i1905al,
@@ -677,14 +680,43 @@ const I1905Device = proto({
 }, I1905Entity);
 
 const I1905AbstractionLayer = proto({
-	new: function(address) {
+	new: function() {
 		return proto({
-			address,
+			address : '00:00:00:00:00:00',
 			interfaces: {},
 			devices: [],
 			topologyChanged: false,
 			seen: timems()
 		}, this);
+	},
+
+	initializeAddress: function() {
+		let mac = 'ff:ff:ff:ff:ff:ff',
+		    hash = 5381;
+
+		/* Determine the lowest MAC address among local interfaces... */
+		for (let ifname, i1905lif in this.interfaces)
+			if (i1905lif.address < mac)
+				mac = i1905lif.address;
+
+		/* ... hash its bytes ... */
+		mac = struct.unpack('!6B', hexdec(mac, ':'));
+
+		hash = ((hash << 5) + hash) + mac[0];
+		hash = ((hash << 5) + hash) + mac[1];
+		hash = ((hash << 5) + hash) + mac[2];
+		hash = ((hash << 5) + hash) + mac[3];
+		hash = ((hash << 5) + hash) + mac[4];
+		hash = ((hash << 5) + hash) + mac[5];
+
+		/* ... and turn result into a locally administered MAC */
+		this.address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x',
+			0x02 | ((hash >> 56) & 0xfe),
+			(hash >> 48) & 0xff, (hash >> 40) & 0xff,
+			(hash >> 32) & 0xff, (hash >> 24) & 0xff,
+			(hash >> 16) & 0xff);
+
+		log.info(`Using AL MAC address: ${this.address}`);
 	},
 
 	addLocalInterface: function(ifname) {

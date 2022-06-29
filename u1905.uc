@@ -15,9 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-const rtnl = require('rtnl');
 const uloop = require('uloop');
-const struct = require('struct');
 
 const socket = require('u1905.socket');
 const cmdu = require('u1905.cmdu');
@@ -28,42 +26,8 @@ const defs = require('u1905.defs');
 const ubus = require('u1905.ubus');
 const log = require('u1905.log');
 
-let IEEE1905_SELF_AL_MAC = '02:19:05:00:19:05';
 
-
-function generate_mac() {
-	let mac = 'ff:ff:ff:ff:ff:ff',
-	    hash = 5381;
-
-	for (let ifname in ARGV) {
-		let link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: ifname });
-
-		if (link && link.address < mac)
-			mac = link.address;
-	}
-
-	mac = struct.unpack('!6B', hexdec(mac, ':'));
-
-	hash = ((hash << 5) + hash) + mac[0];
-	hash = ((hash << 5) + hash) + mac[1];
-	hash = ((hash << 5) + hash) + mac[2];
-	hash = ((hash << 5) + hash) + mac[3];
-	hash = ((hash << 5) + hash) + mac[4];
-	hash = ((hash << 5) + hash) + mac[5];
-
-	return sprintf('%02x:%02x:%02x:%02x:%02x:%02x',
-		0x02 | ((hash >> 56) & 0xfe),
-		(hash >> 48) & 0xff, (hash >> 40) & 0xff,
-		(hash >> 32) & 0xff, (hash >> 24) & 0xff,
-		(hash >> 16) & 0xff);
-}
-
-// determine al mac from lowest interface mac
-IEEE1905_SELF_AL_MAC = generate_mac();
-
-log.info(`Using AL MAC address: ${IEEE1905_SELF_AL_MAC}`);
-
-let i1905al = model.AbstractionLayer.new(IEEE1905_SELF_AL_MAC);
+let i1905al = model.AbstractionLayer.new();
 
 function srcmac_to_almac(address) {
 	let i1905dev = i1905al.lookupDevice(address);
@@ -365,6 +329,8 @@ for (let ifname in ARGV) {
 		exit(1);
 	}
 }
+
+i1905al.initializeAddress();
 
 if (!ubus.publish(i1905al))
 	log.warn(`Unable to publish ieee1905 object: ${ubus.error()}`);
