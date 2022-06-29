@@ -607,7 +607,11 @@ const I1905Device = proto({
 					let addresses = tlv.decode(+type, tlvs[i]);
 					if (addresses) {
 						res.neighbors ??= {};
-						push(res.neighbors.others ??= [], ...addresses);
+
+						for (let j = 1; j < length(addresses); j++) {
+							res.neighbors.others ??= {};
+							push(res.neighbors.others[addresses[0]] ??= [], addresses[j]);
+						}
 					}
 					break;
 
