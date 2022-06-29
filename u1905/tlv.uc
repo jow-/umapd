@@ -1110,6 +1110,8 @@ const TLVEncoder = [
 
 	// 0x1e - L2 neighbor device TLV
 	(local_address, remote_addresses) => {
+		const model = require('u1905.model');
+
 		let fmt = '!B';
 		let val = [ 1 ];
 
@@ -1120,8 +1122,65 @@ const TLVEncoder = [
 			if (i > 255)
 				break;
 
+			let off = length(val);
+
 			fmt += '6sH';
 			push(val, hexdec(mac, ':'), 0);
+
+			for (let i1905dev in model.getDevices()) {
+				let i1905rif = i1905dev.lookupInterface(mac);
+
+				if (!i1905rif)
+					continue;
+
+				let l2 = i1905dev.getTLVs(defs.TLV_L2_NEIGHBOR_DEVICE);
+
+				if (length(l2)) {
+					for (let tlv in l2) {
+						for (let dev in tlv.decode()) {
+							if (dev.local_address == mac)
+								continue;
+
+							for (let ndev in dev.neighbor_devices) {
+								fmt += '6s';
+								push(val, hexdec(ndev.remote_address, ':'));
+
+								val[off + 1]++;
+							}
+						}
+					}
+				}
+				else {
+					let others = i1905dev.getTLVs(defs.TLV_NON1905_NEIGHBOR_DEVICES);
+					let metrics = i1905dev.getTLVs(defs.TLV_LINK_METRIC_RX);
+
+					for (let tlv in others) {
+						let remote_addresses = tlv.decode();
+
+						if (!remote_addresses || remote_addresses[0] == mac)
+							continue;
+
+						for (let j = 1; j < length(remote_addresses); j++) {
+							fmt += '6s';
+							push(val, hexdec(remote_addresses[j], ':'));
+
+							val[off + 1]++;
+						}
+					}
+
+					for (let tlv in metrics) {
+						for (let link in tlv.decode()?.links) {
+							if (link.local_address == mac)
+								continue;
+
+							fmt += '6s';
+							push(val, hexdec(link.remote_address, ':'));
+
+							val[off + 1]++;
+						}
+					}
+				}
+			}
 
 			val[2]++;
 		}
