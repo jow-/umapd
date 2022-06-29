@@ -320,20 +320,9 @@ function emit_topology_discovery() {
 	this.set(60000);
 
 	for (let i1905interface in i1905al.getLocalInterfaces()) {
-		let lldpdu = struct.pack('!3B6s 3B6s 2BH H',
-			(0x1 << 1), 7, 4,						// Chassis ID TLV, subtype 4 (LL address)
-			hexdec(i1905al.address, ':'),			// Chassis ID TLV MAC
+		let lldpdu = lldp.create(i1905al.address, i1905interface.address, 180);
 
-			(0x2 << 1), 7, 3,						// Port ID TLV, subtype 3 (MAC)
-			hexdec(i1905interface.address, ':'),	// Port ID TLV MAC
-
-			(0x3 << 1), 2,							// TTL TLV
-			180, 									// TTL TLV value
-
-			0	 									// EOF TLV
-		);
-
-		i1905interface.lldpsock.send(i1905interface.address, defs.LLDP_NEAREST_BRIDGE_MAC, lldpdu);
+		lldpdu.send(i1905interface.lldpsock);
 
 		let msg = cmdu.create(defs.MSG_TOPOLOGY_DISCOVERY);
 
