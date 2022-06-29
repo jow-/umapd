@@ -297,12 +297,12 @@ function handle_lldp_input(flags) {
 		let msg = lldp.parse(payload[3]);
 
 		if (!msg) {
-			warn(`Ignoring incomplete/malformed LLDPU\n`);
+			log.warn(`Ignoring incomplete/malformed LLDPU`);
 			continue;
 		}
 
 		if (msg.chassis == i1905al.address) {
-			warn(`Ignoring LLDPU originating from our AL MAC (network loop?)\n`);
+			log.warn(`Ignoring LLDPU originating from our AL MAC (network loop?)`);
 			continue;
 		}
 
@@ -361,12 +361,13 @@ for (let ifname in ARGV) {
 		uloop.handle(ifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ|uloop.ULOOP_EDGE_TRIGGER);
 	}
 	else {
-		warn(`Unable to initialize interface ${ifname}: ${socket.error()}\n`);
+		log.error(`Unable to initialize interface ${ifname}: ${socket.error()}`);
+		exit(1);
 	}
 }
 
 if (!ubus.publish(i1905al))
-	warn(`Unable to publish ieee1905 object: ${ubus.error()}\n`);
+	log.warn(`Unable to publish ieee1905 object: ${ubus.error()}`);
 
 uloop.timer(250, update_self);
 uloop.timer(500, emit_topology_discovery);
