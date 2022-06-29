@@ -1,4 +1,4 @@
-#!/usr/bin/env -S ucode -RS
+#!/usr/bin/env ucode
 /*
  * Copyright (c) 2022 Jo-Philipp Wich <jo@mein.io>.
  *
@@ -14,6 +14,8 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+
+'use strict';
 
 const uloop = require('uloop');
 
