@@ -81,18 +81,16 @@ const I1905UbusProcedures = {
 			}
 
 			if (mac != '00:00:00:00:00:00' && !length(metrics)) {
-				return req.reply({
-					metrics: null,
-					reason: 0x07 /* UNMATCHED_NEIGHBOR_MAC_ADDRESS */,
-					reason_name: 'UNMATCHED_NEIGHBOR_MAC_ADDRESS'
-				});
+				let reason = 0x07;
+				let reason_name = defs.REASON_CODES[reason];
+
+				return req.reply({ metrics: null, reason, reason_name });
 			}
 			else {
-				return req.reply({
-					metrics,
-					reason: 0x00 /* SUCCESS */,
-					reason_name: 'SUCCESS'
-				});
+				let reason = 0x00;
+				let reason_name = defs.REASON_CODES[reason];
+
+				return req.reply({ metrics, reason, reason_name });
 			}
 		}
 	},
