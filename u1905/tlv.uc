@@ -819,8 +819,10 @@ const TLVEncoder = [
 		if (!length(links))
 			return null;
 
+		const model = require('u1905.model');
+
 		let fmt = '!6sB';
-		let val = [ hexdec(links[0].al.address, ':'), 0 ];
+		let val = [ hexdec(model.address, ':'), 0 ];
 
 		for (let i1905lif in links) {
 			val[1]++;

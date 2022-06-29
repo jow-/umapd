@@ -74,7 +74,7 @@ const I1905RemoteInterface = proto({
 }, I1905Entity);
 
 const I1905LocalInterface = proto({
-	new: function(ifname, i1905al) {
+	new: function(ifname) {
 		let i1905sock = socket.create(ifname, socket.const.ETH_P_1905);
 
 		if (!i1905sock)
@@ -90,7 +90,6 @@ const I1905LocalInterface = proto({
 		log.info(`Using local interface ${ifname} (${i1905sock.address})`);
 
 		return proto({
-			al: i1905al,
 			address: i1905sock.address,
 			ifname,
 			i1905sock,
@@ -679,16 +678,12 @@ const I1905Device = proto({
 	}
 }, I1905Entity);
 
-const I1905AbstractionLayer = proto({
-	new: function() {
-		return proto({
-			address : '00:00:00:00:00:00',
-			interfaces: {},
-			devices: [],
-			topologyChanged: false,
-			seen: timems()
-		}, this);
-	},
+return proto({
+	address: '00:00:00:00:00:00',
+	interfaces: {},
+	devices: [],
+	topologyChanged: false,
+	seen: timems(),
 
 	initializeAddress: function() {
 		let mac = 'ff:ff:ff:ff:ff:ff',
@@ -720,7 +715,7 @@ const I1905AbstractionLayer = proto({
 	},
 
 	addLocalInterface: function(ifname) {
-		return this.interfaces[ifname] ??= I1905LocalInterface.new(ifname, this);
+		return this.interfaces[ifname] ??= I1905LocalInterface.new(ifname);
 	},
 
 	lookupLocalInterface: function(value) {
@@ -915,7 +910,3 @@ const I1905AbstractionLayer = proto({
 		return (changed != 0);
 	}
 }, I1905Entity);
-
-return {
-	AbstractionLayer: I1905AbstractionLayer
-};

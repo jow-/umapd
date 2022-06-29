@@ -26,11 +26,8 @@ const defs = require('u1905.defs');
 const ubus = require('u1905.ubus');
 const log = require('u1905.log');
 
-
-let i1905al = model.AbstractionLayer.new();
-
 function srcmac_to_almac(address) {
-	let i1905dev = i1905al.lookupDevice(address);
+	let i1905dev = model.lookupDevice(address);
 	return i1905dev?.al_address;
 }
 
@@ -43,7 +40,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		msg.mid);
 
 	// ignore packets looped back to us
-	if (al_mac == i1905al.address) {
+	if (al_mac == model.address) {
 		log.warn(`Ignoring CMDU originating from our AL MAC (network loop?)`);
 		return;
 	}
@@ -56,17 +53,17 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 			return;
 		}
 
-		let dev = i1905al.lookupDevice(al_mac);
+		let dev = model.lookupDevice(al_mac);
 		let query;
 
 		if (!dev) {
-			dev = i1905al.addDevice(al_mac);
+			dev = model.addDevice(al_mac);
 
 		    // is a neighbour not known to us yet, assume it is new
 		    // and send a counter topology discovery message to speed
 		    // up the neighbour discovering us
 			query = cmdu.create(defs.MSG_TOPOLOGY_DISCOVERY);
-			query.add_tlv(defs.TLV_AL_MAC_ADDRESS, i1905al.address);
+			query.add_tlv(defs.TLV_AL_MAC_ADDRESS, model.address);
 			query.add_tlv(defs.TLV_MAC_ADDRESS, i1905lif.address);
 			query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
 		}
@@ -83,7 +80,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 		// query link metrics
 		query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
-		query.add_tlv(defs.TLV_LINK_METRIC_QUERY, i1905al.address, true, true);
+		query.add_tlv(defs.TLV_LINK_METRIC_QUERY, model.address, true, true);
 		query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
 
 		// query higher layer info
@@ -100,7 +97,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 		let reply = cmdu.create(defs.MSG_TOPOLOGY_RESPONSE, msg.mid);
 
-		push(reply.tlvs, ...i1905al.getLocalDevice().getTLVs(
+		push(reply.tlvs, ...model.getLocalDevice().getTLVs(
 			defs.TLV_DEVICE_INFORMATION,
 			defs.TLV_DEVICE_BRIDGING_CAPABILITY,
 			defs.TLV_IEEE1905_NEIGHBOR_DEVICES,
@@ -127,7 +124,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 		let reply = cmdu.create(defs.MSG_LINK_METRIC_RESPONSE, msg.mid);
 
-		for (let tlv in i1905al.getLocalDevice().getTLVs(
+		for (let tlv in model.getLocalDevice().getTLVs(
 			defs.TLV_LINK_METRIC_TX,
 			defs.TLV_LINK_METRIC_RX
 		)) {
@@ -145,7 +142,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 			return;
 		}
 
-		let i1905dev = i1905al.addDevice(devinfo.al_address);
+		let i1905dev = model.addDevice(devinfo.al_address);
 
 		i1905dev.updateTLVs(msg.tlvs);
 	}
@@ -159,7 +156,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 					return;
 				}
 
-				let i1905dev = i1905al.lookupDevice(rx_metrics.al_address);
+				let i1905dev = model.lookupDevice(rx_metrics.al_address);
 
 				if (i1905dev)
 					i1905dev.updateTLVs([ tlv ]);
@@ -172,7 +169,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 					return;
 				}
 
-				let i1905dev = i1905al.lookupDevice(tx_metrics.al_address);
+				let i1905dev = model.lookupDevice(tx_metrics.al_address);
 
 				if (i1905dev)
 					i1905dev.updateTLVs([ tlv ]);
@@ -189,19 +186,19 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 		let reply = cmdu.create(defs.MSG_HIGHER_LAYER_RESPONSE, msg.mid);
 
-		reply.add_tlv(defs.TLV_AL_MAC_ADDRESS, i1905al.address);
+		reply.add_tlv(defs.TLV_AL_MAC_ADDRESS, model.address);
 		reply.add_tlv(defs.TLV_1905_PROFILE_VERSION, 0x01 /* IEEE 1905.1a */);
 		reply.add_tlv(defs.TLV_DEVICE_IDENTIFICATION, null, null, null);
 
 		// TODO: discover web interface presence
 		reply.add_tlv(defs.TLV_CONTROL_URL, 'http://192.168.1.1');
 
-		push(reply.tlvs, ...i1905al.getLocalDevice().getTLVs(defs.TLV_IPV4, defs.TLV_IPV6));
+		push(reply.tlvs, ...model.getLocalDevice().getTLVs(defs.TLV_IPV4, defs.TLV_IPV6));
 
 		reply.send(i1905lif.i1905sock, dstmac, al_mac);
 	}
 	else if (msg.type == defs.MSG_HIGHER_LAYER_RESPONSE) {
-		let i1905dev = i1905al.lookupDevice(al_mac);
+		let i1905dev = model.lookupDevice(al_mac);
 
 		if (i1905dev)
 			i1905dev.updateTLVs(msg.tlvs);
@@ -215,12 +212,12 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		}
 
 		// already sent by us
-		if (al_mac == i1905al.address && msg.mid < cmdu.mid_counter) {
+		if (al_mac == model.address && msg.mid < cmdu.mid_counter) {
 			log.warn(`Not relaying already sent multicast message`);
 			return;
 		}
 
-		for (let i1905lif2 in i1905al.getLocalInterfaces())
+		for (let i1905lif2 in model.getLocalInterfaces())
 			if (i1905lif2 != i1905lif)
 				msg.send(i1905lif2.i1905sock, i1905lif2.address, defs.IEEE1905_MULTICAST_MAC);
 	}
@@ -228,7 +225,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 function handle_i1905_input(flags) {
 	let sock = this.handle();
-	let i1905lif = i1905al.lookupLocalInterface(sock);
+	let i1905lif = model.lookupLocalInterface(sock);
 
 	while (true) {
 		let payload = sock.recv();
@@ -250,7 +247,7 @@ function handle_i1905_input(flags) {
 
 function handle_lldp_input(flags) {
 	let sock = this.handle();
-	let i1905lif = i1905al.lookupLocalInterface(sock);
+	let i1905lif = model.lookupLocalInterface(sock);
 
 	while (true) {
 		let payload = sock.recv();
@@ -265,35 +262,35 @@ function handle_lldp_input(flags) {
 			continue;
 		}
 
-		if (msg.chassis == i1905al.address) {
+		if (msg.chassis == model.address) {
 			log.warn(`Ignoring LLDPU originating from our AL MAC (network loop?)`);
 			continue;
 		}
 
-		i1905al.addDevice(msg.chassis).addInterface(msg.port).updateLLDPTimestamp();
+		model.addDevice(msg.chassis).addInterface(msg.port).updateLLDPTimestamp();
 	}
 }
 
 function update_self() {
 	this.set(5000);
 
-	i1905al.updateSelf();
+	model.updateSelf();
 }
 
 function emit_topology_discovery() {
 	this.set(60000);
 
-	for (let i1905lif in i1905al.getLocalInterfaces()) {
-		let lldpdu = lldp.create(i1905al.address, i1905lif.address, 180);
+	for (let i1905lif in model.getLocalInterfaces()) {
+		let lldpdu = lldp.create(model.address, i1905lif.address, 180);
 
 		lldpdu.send(i1905lif.lldpsock);
 
 		let msg = cmdu.create(defs.MSG_TOPOLOGY_DISCOVERY);
 
-		msg.add_tlv(defs.TLV_AL_MAC_ADDRESS, i1905al.address);
+		msg.add_tlv(defs.TLV_AL_MAC_ADDRESS, model.address);
 		msg.add_tlv(defs.TLV_MAC_ADDRESS, i1905lif.address);
 
-		msg.send(i1905lif.i1905sock, i1905al.address, defs.IEEE1905_MULTICAST_MAC);
+		msg.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC);
 
 	}
 }
@@ -301,24 +298,24 @@ function emit_topology_discovery() {
 function emit_topology_notification() {
 	this.set(1000);
 
-	if (!i1905al.topologyChanged)
+	if (!model.topologyChanged)
 		return;
 
 	let reply = cmdu.create(defs.MSG_TOPOLOGY_NOTIFICATION);
 
-	reply.add_tlv(defs.TLV_AL_MAC_ADDRESS, i1905al.address);
+	reply.add_tlv(defs.TLV_AL_MAC_ADDRESS, model.address);
 
-	for (let i1905lif in i1905al.getLocalInterfaces())
-		reply.send(i1905lif.i1905sock, i1905al.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
+	for (let i1905lif in model.getLocalInterfaces())
+		reply.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
 
-	i1905al.topologyChanged = false;
+	model.topologyChanged = false;
 }
 
 
 uloop.init();
 
 for (let ifname in ARGV) {
-	let ifc = i1905al.addLocalInterface(ifname);
+	let ifc = model.addLocalInterface(ifname);
 
 	if (ifc) {
 		uloop.handle(ifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ|uloop.ULOOP_EDGE_TRIGGER);
@@ -330,9 +327,9 @@ for (let ifname in ARGV) {
 	}
 }
 
-i1905al.initializeAddress();
+model.initializeAddress();
 
-if (!ubus.publish(i1905al))
+if (!ubus.publish())
 	log.warn(`Unable to publish ieee1905 object: ${ubus.error()}`);
 
 uloop.timer(250, update_self);

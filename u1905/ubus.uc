@@ -17,7 +17,7 @@
 const defs = require('u1905.defs');
 const ubus = require('ubus');
 
-let i1905al = null;
+let model = null;
 let ubusconn = null;
 
 const I1905UbusProcedures = {
@@ -26,7 +26,7 @@ const I1905UbusProcedures = {
 		call: function(req) {
 			let interfaces = [];
 
-			for (let i1905lif in i1905al.getLocalInterfaces()) {
+			for (let i1905lif in model.getLocalInterfaces()) {
 				let type = i1905lif.getMediaType();
 
 				push(interfaces, {
@@ -53,14 +53,14 @@ const I1905UbusProcedures = {
 
 			let metrics = [];
 
-			for (let i1905dev in i1905al.getDevices()) {
+			for (let i1905dev in model.getDevices()) {
 				if (mac != '00:00:00:00:00:00' && mac != i1905dev.al_address)
 					continue;
 
-				if (i1905dev == i1905al.getLocalDevice())
+				if (i1905dev == model.getLocalDevice())
 					continue;
 
-				for (let i1905lif in i1905al.getLocalInterfaces()) {
+				for (let i1905lif in model.getLocalInterfaces()) {
 					for (let i1905rif in i1905lif.getNeighbors()) {
 						if (i1905rif.getDevice() != i1905dev)
 							continue;
@@ -105,7 +105,7 @@ const I1905UbusProcedures = {
 				links: []
 			};
 
-			for (let i1905dev in i1905al.getDevices()) {
+			for (let i1905dev in model.getDevices()) {
 				if (!i1905dev.isIEEE1905())
 					continue;
 
@@ -137,6 +137,7 @@ const I1905UbusProcedures = {
 return {
 	connect: function() {
 		ubusconn ??= ubus.connect();
+		model ??= require('u1905.model');
 
 		return (ubusconn != null);
 	},
@@ -145,9 +146,7 @@ return {
 		return ubus.error();
 	},
 
-	publish: function(al) {
-		i1905al = al;
-
+	publish: function() {
 		if (this.connect())
 			return ubusconn.publish("ieee1905", I1905UbusProcedures);
 	},
