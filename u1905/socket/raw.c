@@ -196,7 +196,7 @@ u1905_socket(uc_vm_t *vm, size_t nargs)
 		pr = (int)ucv_int64_get(proto);
 	}
 
-	sock = socket(AF_PACKET, SOCK_RAW, pr);
+	sock = socket(AF_PACKET, SOCK_RAW, htons(pr));
 
 	if (sock == -1)
 		err_return(errno, "Unable to create raw packet socket");
@@ -244,6 +244,16 @@ u1905_socket(uc_vm_t *vm, size_t nargs)
 		if (setsockopt(sock, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mr, sizeof(mr)) == -1) {
 			close(sock);
 			err_return(errno, "Unable to add socket multicast membership");
+		}
+
+		mr.mr_type = PACKET_MR_PROMISC;
+		mr.mr_ifindex = ifidx;
+		mr.mr_alen = 0;
+		memset(mr.mr_address, 0, sizeof(mr.mr_address));
+
+		if (setsockopt(sock, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mr, sizeof(mr)) == -1) {
+			close(sock);
+			err_return(errno, "Unable to enable promiscious mode");
 		}
 	}
 
