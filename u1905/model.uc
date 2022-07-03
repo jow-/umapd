@@ -32,6 +32,84 @@ function timems() {
 	return tv[0] * 1000 + tv[1] / 1000000;
 }
 
+function resolve_bridge_ports(ifname) {
+	let bridge, vlan, link;
+	let upper = ifname;
+
+	while (true) {
+		link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: upper });
+
+		if (!link)
+			return null;
+
+		switch (link.linkinfo?.type) {
+		case 'vlan':
+			upper = link.link;
+			vlan = link.linkinfo.id;
+			continue;
+
+		case 'bridge':
+			bridge = upper;
+			break;
+		}
+
+		break;
+	}
+
+	let links = [];
+
+	if (bridge) {
+		let bridge_links = rtnl.request(
+			rtnl.const.RTM_GETLINK,
+			rtnl.const.NLM_F_DUMP|rtnl.const.NLM_F_STRICT_CHK,
+			{ master: bridge }
+		);
+
+		if (vlan) {
+			let bridge_vlans = rtnl.request(
+				rtnl.const.RTM_GETLINK,
+				rtnl.const.NLM_F_DUMP, {
+				family: rtnl.const.AF_BRIDGE,
+				ext_mask: 2
+			});
+
+			if (bridge_vlans) {
+				for (let link in bridge_vlans) {
+					if (link.master != bridge || link.dev == link.master)
+						continue;
+
+					for (let vi in link.af_spec?.bridge?.bridge_vlan_info) {
+						if (vi.vid > vlan || (vi.vid_end ?? vi.vid) < vlan)
+							continue;
+
+						push(links, { ifname: link.ifname, address: link.address });
+
+						if (vi.flags & rtnl.const.BRIDGE_VLAN_INFO_UNTAGGED)
+							push(links, { ifname: link.ifname, address: link.address });
+						else
+							push(links, { ifname: link.ifname, address: link.address, vlan });
+
+						break;
+					}
+				}
+			}
+			else {
+				for (let link in bridge_links)
+					push(links, { ifname: link.ifname, address: link.address, vlan });
+			}
+		}
+		else {
+			for (let link in bridge_links)
+				push(links, { ifname: link.ifname, address: link.address });
+		}
+	}
+	else {
+		push(links, { ifname: link.ifname, address: link.address });
+	}
+
+	return links;
+}
+
 const I1905Entity = {
 	update: function() {
 		this.seen = timems();
@@ -74,26 +152,14 @@ const I1905RemoteInterface = proto({
 }, I1905Entity);
 
 const I1905LocalInterface = proto({
-	new: function(ifname) {
-		let i1905sock = socket.create(ifname, socket.const.ETH_P_1905);
-
-		if (!i1905sock)
-			return null;
-
-		let lldpsock = socket.create(ifname, socket.const.ETH_P_LLDP);
-
-		if (!lldpsock) {
-			i1905sock.close();
-			return null;
-		}
-
-		log.info(`Using local interface ${ifname} (${i1905sock.address})`);
+	new: function(link, i1905rxsock, i1905txsock, lldprxsock, lldptxsock) {
+		log.info(`Using local interface ${link.ifname} (${link.address})`);
 
 		return proto({
-			address: i1905sock.address,
-			ifname,
-			i1905sock,
-			lldpsock,
+			address: link.address,
+			ifname: link.ifname,
+			i1905rxsock, i1905txsock,
+			lldprxsock, lldptxsock,
 			neighbors: []
 		}, this);
 	},
@@ -719,12 +785,36 @@ return proto({
 	},
 
 	addLocalInterface: function(ifname) {
-		return this.interfaces[ifname] ??= I1905LocalInterface.new(ifname);
+		let i1905rxsock = socket.create(ifname, socket.const.ETH_P_1905);
+		let lldprxsock = socket.create(ifname, socket.const.ETH_P_LLDP);
+		let rv;
+
+		if (!i1905rxsock || !lldprxsock)
+			return null;
+
+		for (let link in resolve_bridge_ports(ifname)) {
+			let i1905txsock = i1905rxsock;
+			let lldptxsock = lldprxsock;
+
+			if (link.ifname != ifname) {
+				i1905txsock = socket.create(ifname, socket.const.ETH_P_1905, link.vlan);
+				lldptxsock = socket.create(ifname, socket.const.ETH_P_LLDP, link.vlan);
+
+				if (!i1905txsock || !lldptxsock)
+					return null;
+			}
+
+			rv = (this.interfaces[link.ifname] ??= I1905LocalInterface.new(link, i1905rxsock, i1905txsock, lldprxsock, lldptxsock));
+		}
+
+		return rv;
 	},
 
 	lookupLocalInterface: function(value) {
 		for (let k, ifc in this.interfaces)
-			if (ifc.ifname == value || ifc.address == value || ifc.i1905sock == value || ifc.lldpsock == value)
+			if (ifc.ifname == value || ifc.address == value ||
+			    ifc.i1905rxsock == value || ifc.i1905txsock == value ||
+			    ifc.lldprxsock == value || ifc.lldptxsock == value)
 				return ifc;
 	},
 

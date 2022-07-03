@@ -18,6 +18,8 @@ const struct = require('struct');
 const rtnl = require('rtnl');
 
 const rawsock = require('u1905.socket.raw');
+const utils = require('u1905.utils');
+const log = require('u1905.log');
 
 let err;
 
@@ -42,11 +44,30 @@ return {
 		return msg;
 	},
 
-	create: function(ifname, ethproto) {
-		let link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: ifname });
+	create: function(ifname, ethproto, vlan) {
+		let upper = ifname;
+		let address, bridge;
 
-		if (!link)
-			return failure('No such interface');
+		while (true) {
+			let link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: upper });
+
+			if (!link)
+				return failure('No such interface');
+
+			address ??= link.address;
+
+			switch (link.linkinfo?.type) {
+			case 'vlan':
+				upper = link.link;
+				continue;
+
+			case 'bridge':
+				bridge = upper;
+				break;
+			}
+
+			break;
+		}
 
 		let sock = rawsock.socket(ifname, ethproto);
 
@@ -54,11 +75,10 @@ return {
 			return failure(rawsock.error());
 
 		return proto({
-			address: link.address,
-			ifname: link.ifname,
-			//vlan: (link.linkinfo?.type == 'vlan') ? link.linkinfo.id : null,
+			address, ifname, bridge, vlan,
 			socket: sock,
-			protocol: ethproto
+			protocol: ethproto,
+			ports: {}
 		}, this);
 	},
 
@@ -67,9 +87,9 @@ return {
 		    dmac = hexdec(dest, ':'),
 		    frame;
 
-		//if (this.vlan)
-		//	frame = struct.pack('!6s6sHHH*', dmac, smac, this.const.ETH_P_8021Q, this.vlan, this.const.ETH_P_IEEE1905, data);
-		//else
+		if (this.vlan)
+			frame = struct.pack('!6s6sHHH*', dmac, smac, this.const.ETH_P_8021Q, this.vlan, this.protocol, data);
+		else
 			frame = struct.pack('!6s6sH*', dmac, smac, this.protocol, data);
 
 		return this.socket.send(dest, frame);
@@ -81,11 +101,47 @@ return {
 		if (!frame)
 			return failure(rawsock.error());
 
+		let dstmac = utils.ether_ntoa(frame, 0);
+		let srcmac = utils.ether_ntoa(frame, 6);
+		let ifcmac = this.address;
+
+		/* Determine RX interface */
+		let rxdev = this.ifname;
+
+		if (this.bridge) {
+			let neigh = rtnl.request(rtnl.const.RTM_GETNEIGH, 0, {
+				family: rtnl.const.AF_BRIDGE,
+				master: this.bridge,
+				vlan: this.vlan,
+				lladdr: srcmac
+			});
+
+			if (neigh) {
+				let rxdev = neigh.dev;
+
+				if (!this.ports[rxdev]) {
+					let link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: rxdev });
+
+					if (link)
+						ifcmac = this.ports[rxdev] = link.address;
+					else
+						log.warn(`Failed to query link information for bridge ${this.bridge} port ${rxdev}: ${rtnl.error()}`);
+				}
+				else {
+					ifcmac = this.ports[rxdev];
+				}
+			}
+			else {
+				log.warn(`No FDB entry for source MAC ${srcmac} on bridge ${this.bridge}`);
+			}
+		}
+
 		return [
-			sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...struct.unpack('!6B', frame, 0)),
-			sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...struct.unpack('!6B', frame, 6)),
+			dstmac,
+			srcmac,
 			ord(frame, 12) * 256 + ord(frame, 13),
-			substr(frame, 14)
+			substr(frame, 14),
+			ifcmac
 		];
 	},
 
