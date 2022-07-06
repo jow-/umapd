@@ -64,13 +64,6 @@ function parse_fragment(tlvs) {
 		offset += tlv.length + 3;
 	}
 
-	if (offset + 1 != length(tlvs)) {
-		log.debug('Extraneous data after EOM TLV');
-
-		// We can't fail here since some implementations (IOPSYS) send garbage data
-		//return null;
-	}
-
 	return payload;
 }
 
