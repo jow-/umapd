@@ -151,7 +151,7 @@ const I1905RemoteInterface = proto({
 
 const I1905LocalInterface = proto({
 	new: function(link, i1905rxsock, i1905txsock, lldprxsock, lldptxsock) {
-		log.info(`Using local interface ${link.ifname} (${link.address})`);
+		log.info(`Using local interface ${link.ifname} (${link.address}${link.vlan ? `, VLAN ${link.vlan}` : ''})`);
 
 		return proto({
 			address: link.address,
