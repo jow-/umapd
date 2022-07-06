@@ -919,8 +919,6 @@ const TLVEncoder = [
 			    i1905rif = links[i + 1],
 			    metrics = i1905lif.getLinkMetrics(i1905rif.address);
 
-			warn(`TX-LINK: ${i1905lif.address} -> ${i1905rif.address}\n`);
-
 			fmt += '6s6sHBIIHHH';
 			push(val,
 				hexdec(i1905lif.address, ':'),
