@@ -82,8 +82,6 @@ function resolve_bridge_ports(ifname) {
 						if (vi.vid > vlan || (vi.vid_end ?? vi.vid) < vlan)
 							continue;
 
-						push(links, { ifname: link.ifname, address: link.address });
-
 						if (vi.flags & rtnl.const.BRIDGE_VLAN_INFO_UNTAGGED)
 							push(links, { ifname: link.ifname, address: link.address });
 						else
