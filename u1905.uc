@@ -83,7 +83,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 		// query link metrics
 		query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
-		query.add_tlv(defs.TLV_LINK_METRIC_QUERY, model.address, true, true);
+		query.add_tlv(defs.TLV_LINK_METRIC_QUERY, null /* model.address */, true, true);
 		query.send(i1905lif.i1905txsock, i1905lif.address, al_mac);
 
 		// query higher layer info
