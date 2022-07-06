@@ -796,8 +796,27 @@ return proto({
 	},
 
 	addLocalInterface: function(ifname) {
-		let i1905rxsock = socket.create(ifname, socket.const.ETH_P_1905);
-		let lldprxsock = socket.create(ifname, socket.const.ETH_P_LLDP);
+		let upper = ifname;
+		let vlan;
+
+		while (true) {
+			let link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: upper });
+
+			if (!link)
+				return null;
+
+			switch (link.linkinfo?.type) {
+			case 'vlan':
+				upper = link.link;
+				vlan = link.linkinfo.id;
+				continue;
+			}
+
+			break;
+		}
+
+		let i1905rxsock = socket.create(ifname, socket.const.ETH_P_1905, vlan);
+		let lldprxsock = socket.create(ifname, socket.const.ETH_P_LLDP, vlan);
 		let rv;
 
 		if (!i1905rxsock || !lldprxsock)
