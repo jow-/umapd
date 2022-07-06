@@ -215,7 +215,8 @@ return {
 		let size = 0;
 		let fid = 0;
 
-		log.debug('TX: %s > %s : %s (%04x) [%d]',
+		log.debug('TX %-8s: %s > %s : %s (%04x) [%d]',
+			socket.ifname,
 			src, dest,
 			defs.getCMDUTypeName(this.type) ?? 'Unknown Type', this.type,
 			this.mid);
