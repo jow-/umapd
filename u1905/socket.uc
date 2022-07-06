@@ -104,20 +104,25 @@ return {
 		let dstmac = utils.ether_ntoa(frame, 0);
 		let srcmac = utils.ether_ntoa(frame, 6);
 		let ifcmac = this.address;
+		let ifcname = this.ifname;
 
 		/* Determine RX interface */
 		let rxdev = this.ifname;
 
 		if (this.bridge) {
-			let neigh = rtnl.request(rtnl.const.RTM_GETNEIGH, 0, {
+			let search = {
 				family: rtnl.const.AF_BRIDGE,
 				master: this.bridge,
-				vlan: this.vlan,
 				lladdr: srcmac
-			});
+			};
+
+			if (this.vlan)
+				search.vlan = this.vlan;
+
+			let neigh = rtnl.request(rtnl.const.RTM_GETNEIGH, 0, search);
 
 			if (neigh) {
-				let rxdev = neigh.dev;
+				let rxdev = ifcname = neigh.dev;
 
 				if (!this.ports[rxdev]) {
 					let link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: rxdev });
@@ -141,7 +146,7 @@ return {
 			srcmac,
 			ord(frame, 12) * 256 + ord(frame, 13),
 			substr(frame, 14),
-			ifcmac
+			ifcmac, ifcname
 		];
 	},
 
