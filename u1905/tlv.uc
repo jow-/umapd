@@ -247,7 +247,7 @@ const TLVDecoder = [
 
 	// 0x08 - Link metric query TLV
 	(payload) => {
-		if (length(payload) != 8)
+		if (length(payload) < 2)
 			return null;
 
 		let neigh = ord(payload, 0),
