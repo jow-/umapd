@@ -221,7 +221,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		}
 
 		for (let i1905lif2 in model.getLocalInterfaces())
-			if (i1905lif2 != i1905lif)
+			if (i1905lif2.i1905rxsock != i1905lif.i1905rxsock)
 				msg.send(i1905lif2.i1905txsock, i1905lif2.address, defs.IEEE1905_MULTICAST_MAC);
 	}
 }
