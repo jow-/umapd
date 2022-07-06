@@ -827,8 +827,8 @@ return proto({
 			let lldptxsock = lldprxsock;
 
 			if (link.ifname != ifname) {
-				i1905txsock = socket.create(ifname, socket.const.ETH_P_1905, link.vlan);
-				lldptxsock = socket.create(ifname, socket.const.ETH_P_LLDP, link.vlan);
+				i1905txsock = socket.create(link.ifname, socket.const.ETH_P_1905, link.vlan);
+				lldptxsock = socket.create(link.ifname, socket.const.ETH_P_LLDP, link.vlan);
 
 				if (!i1905txsock || !lldptxsock)
 					return null;
