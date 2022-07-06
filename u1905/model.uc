@@ -428,11 +428,13 @@ const I1905LocalInterface = proto({
 			}
 		}
 		else {
+			let speed = max(ifinfo.speed, 100);
+
 			/* Calculate estimated ethernet throughput */
 			let framesize = (14 /* header */ + 4 /* crc */ + ifinfo.mtu) * 8,
 			    preamble = 8 * 8,
 			    framegap = 12 * 8,
-			    frames_per_second = (ifinfo.speed * 1000.0) / (framesize + preamble + framegap),
+			    frames_per_second = (speed * 1000.0) / (framesize + preamble + framegap),
 			    total_throughput = frames_per_second * framesize,
 			    preamble_overhead = frames_per_second * preamble,
 			    interframe_overhead = frames_per_second * framegap;
@@ -441,7 +443,7 @@ const I1905LocalInterface = proto({
 			res.rx_packets = ifinfo.statistics.tx_packets;
 			res.rx_errors = ifinfo.statistics.rx_errors;
 			res.rx_packets = ifinfo.statistics.rx_packets;
-			res.phyrate = ifinfo.speed;
+			res.phyrate = speed;
 			res.throughput = +sprintf('%.0f', (total_throughput - preamble_overhead - interframe_overhead) / 1000);
 		}
 
