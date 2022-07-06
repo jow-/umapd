@@ -376,21 +376,22 @@ const I1905LocalInterface = proto({
 		if (!refresh && this.info)
 			return this.info;
 
-		let link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: this.ifname }),
-		    wifi = nl80211.request(nl80211.const.NL80211_CMD_GET_INTERFACE, 0, { dev: this.ifname }),
-		    wphy = nl80211.request(nl80211.const.NL80211_CMD_GET_WIPHY, 0, { dev: this.ifname }),
-		    wsta = nl80211.request(nl80211.const.NL80211_CMD_GET_STATION, nl80211.const.NLM_F_DUMP, { dev: this.ifname });
+		let ifname = this.i1905txsock.ifname,
+		    link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: ifname }),
+		    wifi = nl80211.request(nl80211.const.NL80211_CMD_GET_INTERFACE, 0, { dev: ifname }),
+		    wphy = nl80211.request(nl80211.const.NL80211_CMD_GET_WIPHY, 0, { dev: ifname }),
+		    wsta = nl80211.request(nl80211.const.NL80211_CMD_GET_STATION, nl80211.const.NLM_F_DUMP, { dev: ifname });
 
 		if (!link)
 			return null;
 
 		return (this.info = {
-			ifname: this.ifname,
+			ifname,
 			address: link.address,
 			statistics: link.stats64,
 			bridge: (link.linkinfo?.slave?.type == 'bridge') ? link.master : null,
-			speed: +fs.readfile(`/sys/class/net/${this.ifname}/speed`),
-			mtu: +fs.readfile(`/sys/class/net/${this.ifname}/mtu`),
+			speed: +fs.readfile(`/sys/class/net/${ifname}/speed`),
+			mtu: +fs.readfile(`/sys/class/net/${ifname}/mtu`),
 			wifi: (wifi && wphy) ? {
 				phy: wphy,
 				interface: wifi,
