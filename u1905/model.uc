@@ -163,8 +163,10 @@ const I1905LocalInterface = proto({
 	},
 
 	addNeighbor: function(i1905if) {
-		if (!(i1905if in this.neighbors))
+		if (!(i1905if in this.neighbors)) {
+			log.debug('Adding new link %s/%s -> %s', this.ifname, this.address, i1905if.address);
 			push(this.neighbors, i1905if);
+		}
 
 		return i1905if;
 	},
@@ -450,11 +452,15 @@ const I1905LocalInterface = proto({
 
 		now ??= timems();
 
-		for (let i = 0; i < length(this.neighbors); )
-			if (now - this.neighbors[i].seen > 180000)
+		for (let i = 0; i < length(this.neighbors); ) {
+			if (now - this.neighbors[i].seen > 180000) {
+				log.debug('Removing stale link %s/%s -> %s', this.ifname, this.address, this.neighbors[i].address);
 				changed |= !!splice(this.neighbors, i, 1);
-			else
+			}
+			else {
 				changed |= this.neighbors[i++].collectGarbage(now);
+			}
+		}
 
 		return (changed != 0);
 	}
@@ -732,11 +738,15 @@ const I1905Device = proto({
 
 		now ??= timems();
 
-		for (let i = 0; i < length(this.interfaces); )
-			if (now - this.interfaces[i].seen > 180000)
+		for (let i = 0; i < length(this.interfaces); ) {
+			if (now - this.interfaces[i].seen > 180000) {
+				log.debug('Removing stale interface %s from device %s', this.interfaces[i].address, this.al_address);
 				changed |= !!splice(this.interfaces, i, 1);
-			else
+			}
+			else {
 				i++;
+			}
+		}
 
 		for (let k, v in this.tlvs)
 			if (now - v[0] > 180000)
@@ -991,11 +1001,15 @@ return proto({
 
 		now ??= timems();
 
-		for (let i = 1 /* skip self */; i < length(this.devices); )
-			if (now - this.devices[i].seen > 180000)
+		for (let i = 1 /* skip self */; i < length(this.devices); ) {
+			if (now - this.devices[i].seen > 180000) {
+				log.debug('Removing stale neighbor device %s', this.devices[i].al_address);
 				changed |= !!splice(this.devices, i, 1);
-			else
+			}
+			else {
 				changed |= this.devices[i++].collectGarbage(now);
+			}
+		}
 
 		this.topologyChanged ||= (changed != 0);
 
