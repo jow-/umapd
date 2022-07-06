@@ -191,7 +191,7 @@ const I1905LocalInterface = proto({
 				info.type = 0x0101; /* default to IEEE 802.11g (2.4 GHz), try refining below */
 
 				for (let band in info.wifi.phy.wiphy_bands) {
-					for (let freq in band.freqs) {
+					for (let freq in band?.freqs) {
 						if (freq.freq == info.wifi.interface.center_freq1) {
 							if (band.vht_capa) {
 								info.type = 0x0105; /* IEEE 802.11ac (5 GHz) */

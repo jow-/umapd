@@ -92,7 +92,7 @@ function encode_local_interface(i1905lif) {
 		}
 
 		for (let band in info.wifi.phy.wiphy_bands) {
-			for (let i, freq in band.freqs) {
+			for (let i, freq in band?.freqs) {
 				if (freq.freq == info.wifi.interface.center_freq1)
 					chan1 = i + 1;
 				else if (freq.freq == info.wifi.interface.center_freq2)
