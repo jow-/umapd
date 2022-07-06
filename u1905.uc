@@ -36,11 +36,11 @@ function srcmac_to_almac(address) {
 function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 	let al_mac = msg.decode(defs.TLV_AL_MAC_ADDRESS);
 
-	log.debug('RX: %s > %s : %s (%04x) [%d] (%s/%s)',
+	log.debug('RX %-8s: %s > %s : %s (%04x) [%d]',
+		i1905lif.ifname,
 		srcmac, dstmac,
 		defs.getCMDUTypeName(msg.type) ?? 'Unknown Type', msg.type,
-		msg.mid,
-		i1905lif.ifname, i1905lif.address);
+		msg.mid);
 
 	// ignore packets looped back to us
 	if (al_mac == model.address) {
@@ -235,11 +235,11 @@ function handle_i1905_input(flags) {
 		if (!payload)
 			break;
 
-		let i1905lif = model.lookupLocalInterface(payload[4] ?? sock);
+		let i1905lif = model.lookupLocalInterface(payload[5] ?? sock);
 		let msg = cmdu.parse(payload[1], payload[3]);
 
 		if (!msg)
-			log.debug('RX: %s > %s : Invalid CMDU', payload[1], payload[0]);
+			log.debug('RX %-8s: %s > %s : Invalid CMDU', payload[5], payload[1], payload[0]);
 		else if (msg.is_complete())
 			handle_i1905_cmdu(i1905lif, payload[0], payload[1], msg);
 	}
@@ -254,7 +254,7 @@ function handle_lldp_input(flags) {
 		if (!payload)
 			break;
 
-		let i1905lif = model.lookupLocalInterface(payload[4] ?? sock);
+		let i1905lif = model.lookupLocalInterface(payload[5] ?? sock);
 		let msg = lldp.parse(payload[3]);
 
 		if (!msg) {
