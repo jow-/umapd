@@ -31,7 +31,7 @@ return {
 		while (true) {
 			let tl = struct.unpack('!BB', payload, offset);
 
-			if (!tl)
+			if (!tl || (tl[0] == 0 && tl[1] == 0))
 				break;
 
 			let t = tl[0] >> 1;
