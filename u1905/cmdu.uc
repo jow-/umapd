@@ -14,14 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-const fs = require('fs');
-const rtnl = require('rtnl');
-const struct = require('struct');
-const nl80211 = require('nl80211');
-const i1905tlv = require('u1905.tlv');
-const utils = require('u1905.utils');
-const log = require('u1905.log');
-const defs = require('u1905.defs');
+import { pack, unpack } from 'struct';
+
+import i1905tlv from 'u1905.tlv';
+import utils from 'u1905.utils';
+import log from 'u1905.log';
+import defs from 'u1905.defs';
 
 const ETHERNET_HEADER_LENGTH = 14;
 const IEEE1905_HEADER_LENGTH = 8;
@@ -39,7 +37,7 @@ const CMDU_MAX_PAYLOAD_SIZE = 102400;
 let reassembly = utils.Queue(CMDU_MAX_CONCURRENT_REASSEMBLY);
 
 function send_fragment(socket, src, dest, type, mid, fid, payload_fmt, payload_data, flags) {
-	return socket.send(src, dest, struct.pack(`!BxHHBB${join('', payload_fmt)}`,
+	return socket.send(src, dest, pack(`!BxHHBB${join('', payload_fmt)}`,
 		CMDU_MESSAGE_VERSION,
 		type,
 		mid,
@@ -67,7 +65,7 @@ function parse_fragment(tlvs) {
 	return payload;
 }
 
-return {
+export default {
 	mid_counter: 0,
 
 	create: function(type, mid) {
@@ -85,7 +83,7 @@ return {
 			return null;
 		}
 
-		let pktdata = struct.unpack('!BxHHBB*', payload),
+		let pktdata = unpack('!BxHHBB*', payload),
 		    version = pktdata[0],
 		    type = pktdata[1],
 		    mid = pktdata[2],
@@ -232,7 +230,7 @@ return {
 			this.add_tlv(0);
 
 		for (let tlv in this.tlvs) {
-			let tlv_data = struct.pack('!BH*', tlv.type, tlv.length, tlv.payload);
+			let tlv_data = pack('!BH*', tlv.type, tlv.length, tlv.payload);
 			let tlv_length = length(tlv_data);
 
 			assert(tlv_length <= CMDU_MAX_PAYLOAD_LENGTH, 'TLV too large');

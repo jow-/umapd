@@ -14,12 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-const struct = require('struct');
+import { pack, unpack } from 'struct';
 
-const utils = require('u1905.utils');
-const defs = require('u1905.defs');
+import utils from 'u1905.utils';
+import defs from 'u1905.defs';
 
-return {
+export default {
 	create: function(chassis, port, ttl) {
 		return proto({ chassis, port, ttl }, this);
 	},
@@ -29,7 +29,7 @@ return {
 		let offset = 0;
 
 		while (true) {
-			let tl = struct.unpack('!BB', payload, offset);
+			let tl = unpack('!BB', payload, offset);
 
 			if (!tl || (tl[0] == 0 && tl[1] == 0))
 				break;
@@ -41,19 +41,19 @@ return {
 				return null;
 
 			if (t == 0x1 && l == 7) {
-				let v = struct.unpack('!B6s', payload, offset + 2);
+				let v = unpack('!B6s', payload, offset + 2);
 
 				if (v?.[0] == 4)
 					chassis = utils.ether_ntoa(v[1]);
 			}
 			else if (t == 0x2 && l == 7) {
-				let v = struct.unpack('!B6s', payload, offset + 2);
+				let v = unpack('!B6s', payload, offset + 2);
 
 				if (v?.[0] == 3)
 					port = utils.ether_ntoa(v[1]);
 			}
 			else if (t == 0x3 && l == 2) {
-				let v = struct.unpack('!H', payload, offset + 2);
+				let v = unpack('!H', payload, offset + 2);
 
 				if (v)
 					ttl = v[0];
@@ -69,7 +69,7 @@ return {
 	},
 
 	send: function(socket) {
-		return socket.send(socket.address, defs.LLDP_NEAREST_BRIDGE_MAC, struct.pack('!3B6s 3B6s 2BH H',
+		return socket.send(socket.address, defs.LLDP_NEAREST_BRIDGE_MAC, pack('!3B6s 3B6s 2BH H',
 			(0x1 << 1), 7, 4,			// Chassis ID TLV, subtype 4 (LL address)
 			hexdec(this.chassis, ':'),	// Chassis ID TLV MAC
 

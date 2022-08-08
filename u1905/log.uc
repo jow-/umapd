@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-return {
+export default {
 	debug: (fmt, ...args) => warn(sprintf(`[D] ${fmt}\n`, ...args)),
 	warn:  (fmt, ...args) => warn(sprintf(`[W] ${fmt}\n`, ...args)),
 	error: (fmt, ...args) => warn(sprintf(`[E] ${fmt}\n`, ...args)),

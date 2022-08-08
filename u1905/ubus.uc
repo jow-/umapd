@@ -14,8 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-const defs = require('u1905.defs');
-const ubus = require('ubus');
+import defs from 'u1905.defs';
+import model from 'u1905.model';
+
+import { connect as ubus_connect, error as ubus_error } from 'ubus';
 
 let model = null;
 let ubusconn = null;
@@ -163,16 +165,15 @@ const I1905UbusProcedures = {
 	}
 };
 
-return {
+export default {
 	connect: function() {
-		ubusconn ??= ubus.connect();
-		model ??= require('u1905.model');
+		ubusconn ??= ubus_connect();
 
 		return (ubusconn != null);
 	},
 
 	error: function() {
-		return ubus.error();
+		return ubus_error();
 	},
 
 	publish: function() {

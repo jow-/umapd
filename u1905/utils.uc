@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-const struct = require('struct');
+import { unpack } from 'struct';
 
 const Queue = {
 	push: function(item) {
@@ -132,7 +132,7 @@ const AgingDict = {
 	}
 };
 
-return {
+export default {
 	Queue: (maxLength, onRemove) => proto({
 		maxLength,
 		onRemove,
@@ -146,7 +146,7 @@ return {
 	}, AgingDict),
 
 	ether_ntoa: function(v, off) {
-		let mac = struct.unpack('6B', v, off);
+		let mac = unpack('6B', v, off);
 		return mac ? sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...mac) : null;
 	},
 

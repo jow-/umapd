@@ -14,11 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-const fs = require('fs');
-const struct = require('struct');
+import { readfile, open } from 'fs';
+import { pack, unpack } from 'struct';
 
-const utils = require('u1905.utils');
-const defs = require('u1905.defs');
+import utils from 'u1905.utils';
+import defs from 'u1905.defs';
 
 
 function encode_local_interface(i1905lif) {
@@ -100,15 +100,15 @@ function encode_local_interface(i1905lif) {
 			}
 		}
 
-		media_info = struct.pack('!6sBBBB', hexdec(info.wifi.interface.mac, ':'), role, chanbw, chan1, chan2);
+		media_info = pack('!6sBBBB', hexdec(info.wifi.interface.mac, ':'), role, chanbw, chan1, chan2);
 	}
 
-	return struct.pack('!6sHB*', hexdec(info.address, ':'), info.type, length(media_info), media_info);
+	return pack('!6sHB*', hexdec(info.address, ':'), info.type, length(media_info), media_info);
 }
 
 function decode_media_info(media_type, media_info) {
 	if ((media_type & 0xff00) == 0x0100) {
-		let mi = struct.unpack('!6sBBBB', media_info);
+		let mi = unpack('!6sBBBB', media_info);
 
 		if (!mi)
 			return null;
@@ -154,7 +154,7 @@ const TLVDecoder = [
 			if (off + 9 > len)
 				return null;
 
-			let values = struct.unpack('!HB', payload, off + 6);
+			let values = unpack('!HB', payload, off + 6);
 
 			if (off + 9 + values[1] > len)
 				return null;
@@ -296,7 +296,7 @@ const TLVDecoder = [
 		};
 
 		for (let off = 12; off < len; off += 29) {
-			let values = struct.unpack('!HBIIHHH', payload, off + 12);
+			let values = unpack('!HBIIHHH', payload, off + 12);
 
 			if (values[1] > 0x01)
 				return null;
@@ -336,7 +336,7 @@ const TLVDecoder = [
 		};
 
 		for (let off = 12; off < len; off += 23) {
-			let values = struct.unpack('!HIIB', payload, off + 12);
+			let values = unpack('!HIIB', payload, off + 12);
 
 			if (!defs.MEDIA_TYPES[values[0]])
 				return null;
@@ -431,7 +431,7 @@ const TLVDecoder = [
 			if (off + 3 > len)
 				return null;
 
-			let values = struct.unpack('!HB', payload, off);
+			let values = unpack('!HB', payload, off);
 
 			if (off + 3 + values[1] > len)
 				return null;
@@ -493,7 +493,7 @@ const TLVDecoder = [
 
 			push(res.links, {
 				local_address: utils.ether_ntoa(payload, off),
-				oui: sprintf('%02x:%02x:%02x', ...struct.unpack(payload, '!3B', off + 6)),
+				oui: sprintf('%02x:%02x:%02x', ...unpack(payload, '!3B', off + 6)),
 				variant_index: ord(payload, off + 9),
 				variant_name: trim(substr(payload, off + 10, 32)),
 				xml_description_url: substr(payload, off + 44, url_len),
@@ -550,8 +550,8 @@ const TLVDecoder = [
 				push(entry.ipaddrs, {
 					type: ord(payload, off),
 					type_name: defs.IPV4ADDR_TYPES[ord(payload, off)] ?? 'Reserved',
-					ipaddr: arrtoip(struct.unpack('!4B', payload, off + 1)),
-					dhcpaddr: arrtoip(struct.unpack('!4B', payload, off + 5))
+					ipaddr: arrtoip(unpack('!4B', payload, off + 1)),
+					dhcpaddr: arrtoip(unpack('!4B', payload, off + 5))
 				});
 			}
 
@@ -576,7 +576,7 @@ const TLVDecoder = [
 				return null;
 
 			let address = utils.ether_ntoa(payload, off);
-			let ip6ll = arrtoip(struct.unpack('!16B', payload, off + 6));
+			let ip6ll = arrtoip(unpack('!16B', payload, off + 6));
 			let num_addrs = ord(payload, off + 22);
 
 			off += 23;
@@ -594,8 +594,8 @@ const TLVDecoder = [
 				push(entry.ip6addrs, {
 					type: ord(payload, off),
 					type_name: defs.IPV6ADDR_TYPES[ord(payload, off)] ?? 'Reserved',
-					ip6addr: arrtoip(struct.unpack('!16B', payload, off + 1)),
-					originaddr: arrtoip(struct.unpack('!16B', payload, off + 17))
+					ip6addr: arrtoip(unpack('!16B', payload, off + 1)),
+					originaddr: arrtoip(unpack('!16B', payload, off + 17))
 				});
 			}
 
@@ -629,7 +629,7 @@ const TLVDecoder = [
 				return null;
 
 			push(res, {
-				oui: sprintf('%02x:%02x:%02x', ...struct.unpack('!3B', payload, off)),
+				oui: sprintf('%02x:%02x:%02x', ...unpack('!3B', payload, off)),
 				variant_index: ord(payload, off + 3)
 			});
 
@@ -672,7 +672,7 @@ const TLVDecoder = [
 			if (off + 13 + info_len > len)
 				return null;
 
-			let values = struct.unpack('!H3BB', payload, off + 6);
+			let values = unpack('!H3BB', payload, off + 6);
 
 			if (!defs.MEDIA_TYPES[values[0]])
 				return null;
@@ -768,7 +768,7 @@ const TLVDecoder = [
 			if (off + 8 > len)
 				return null;
 
-			let num_neigh = struct.unpack('!H', payload, off + 6)[0];
+			let num_neigh = unpack('!H', payload, off + 6)[0];
 
 			push(res, {
 				local_address: utils.ether_ntoa(payload, off),
@@ -781,7 +781,7 @@ const TLVDecoder = [
 				if (off + 8 > len)
 					return null;
 
-				let num_addrs = struct.unpack('!H', payload, off + 6)[0];
+				let num_addrs = unpack('!H', payload, off + 6)[0];
 
 				push(res[-1].neighbor_devices, {
 					remote_address: utils.ether_ntoa(payload, off),
@@ -807,22 +807,20 @@ const TLVEncoder = [
 	() => '',
 
 	// 0x01 - AL MAC address type TLV
-	(mac) => struct.pack('!6s', hexdec(mac, ':') ?? ''),
+	(mac) => pack('!6s', hexdec(mac, ':') ?? ''),
 
 	// 0x02 - MAC address type TLV
-	(mac) => struct.pack('!6s', hexdec(mac, ':') ?? ''),
+	(mac) => pack('!6s', hexdec(mac, ':') ?? ''),
 
 	// 0x03 - Device information type TLV
-	(links) => {
+	(links, al_address) => {
 		assert(length(links) <= 255, 'Too many interfaces for TLV');
 
 		if (!length(links))
 			return null;
 
-		const model = require('u1905.model');
-
 		let fmt = '!6sB';
-		let val = [ hexdec(model.address, ':'), 0 ];
+		let val = [ hexdec(al_address, ':'), 0 ];
 
 		for (let i1905lif in links) {
 			val[1]++;
@@ -830,7 +828,7 @@ const TLVEncoder = [
 			push(val, encode_local_interface(i1905lif));
 		}
 
-		return struct.pack(fmt, ...val);
+		return pack(fmt, ...val);
 	},
 
 	// 0x04 - Device bridging capability TLV
@@ -857,7 +855,7 @@ const TLVEncoder = [
 			}
 		}
 
-		return struct.pack(fmt, ...val);
+		return pack(fmt, ...val);
 	},
 
 	// 0x05
@@ -873,7 +871,7 @@ const TLVEncoder = [
 			push(val, hexdec(addr, ':'));
 		}
 
-		return struct.pack(fmt, ...val);
+		return pack(fmt, ...val);
 	},
 
 	// 0x07 - 1905.1 neighbor device TLV
@@ -888,7 +886,7 @@ const TLVEncoder = [
 				i1905rif.isBridged() ? 0b10000000 : 0);
 		}
 
-		return struct.pack(fmt, ...val);
+		return pack(fmt, ...val);
 	},
 
 	// 0x08 - Link metric query TLV
@@ -902,7 +900,7 @@ const TLVEncoder = [
 		else /* if (tx) */
 			metrics = 0x00;
 
-		return struct.pack('!B*B',
+		return pack('!B*B',
 			address ? 0x01 : 0x00,
 			address ? hexdec(address, ':') : '',
 			metrics
@@ -933,7 +931,7 @@ const TLVEncoder = [
 			);
 		}
 
-		return struct.pack(fmt, ...val);
+		return pack(fmt, ...val);
 	},
 
 	// 0x0a - Receiver link metric TLV
@@ -956,26 +954,26 @@ const TLVEncoder = [
 				metrics.rssi);
 		}
 
-		return struct.pack(fmt, ...val);
+		return pack(fmt, ...val);
 	},
 
 	// 0x0b - Vendor specific TLV
 	(data) => data,
 
 	// 0x0c - Link metric result code TLV
-	(code) => struct.pack('!B', code),
+	(code) => pack('!B', code),
 
 	// 0x0d - SearchedRole TLV
-	(role) => struct.pack('!B', role),
+	(role) => pack('!B', role),
 
 	// 0x0e - AutoconfigFreqBand TLV
-	(band) => struct.pack('!B', band),
+	(band) => pack('!B', band),
 
 	// 0x0f - SupportedRole TLV
-	(role) => struct.pack('!B', role),
+	(role) => pack('!B', role),
 
 	// 0x10 - SupportedFreqBand TLV
-	(band) => struct.pack('!B', band),
+	(band) => pack('!B', band),
 
 	// 0x11 - WSC TLV
 	null,
@@ -991,16 +989,16 @@ const TLVEncoder = [
 		if (length(ifnames))
 			die('Generic phy description not implemented');
 
-		return struct.pack('!6sB',
+		return pack('!6sB',
 			hexdec(al_address, ':'),
 			length(ifnames));
 	},
 
 	// 0x15 - Device identification type TLV
 	(friendly_name, manufacturer_name, manufacturer_model) => {
-		friendly_name ??= trim(fs.readfile('/proc/sys/kernel/hostname'));
+		friendly_name ??= trim(readfile('/proc/sys/kernel/hostname'));
 
-		let osrel = fs.open('/etc/os-release', 'r');
+		let osrel = open('/etc/os-release', 'r');
 		if (osrel) {
 			for (let line = osrel.read('line'); line != ''; line = osrel.read('line')) {
 				let kv = match(line, '^([^=]+)="(.+)"\n?$');
@@ -1020,9 +1018,9 @@ const TLVEncoder = [
 		}
 
 		if (manufacturer_model == null || manufacturer_model == 'Generic')
-			manufacturer_model = trim(fs.readfile('/tmp/sysinfo/model'));
+			manufacturer_model = trim(readfile('/tmp/sysinfo/model'));
 
-		return struct.pack('!63sx63sx63sx',
+		return pack('!63sx63sx63sx',
 			friendly_name ?? 'Unknown',
 			manufacturer_name ?? 'Unknown',
 			manufacturer_model ?? 'Unknown'
@@ -1058,7 +1056,7 @@ const TLVEncoder = [
 			}
 		}
 
-		return struct.pack(fmt, ...val);
+		return pack(fmt, ...val);
 	},
 
 	// 0x18 - IPv6 type TLV
@@ -1090,14 +1088,14 @@ const TLVEncoder = [
 			}
 		}
 
-		return struct.pack(fmt, ...val);
+		return pack(fmt, ...val);
 	},
 
 	// 0x19 - Push_Button_Generic_Phy_Event notification TLV
 	null,
 
 	// 0x1a - 1905 profile version TLV
-	(version) => struct.pack('!B', version),
+	(version) => pack('!B', version),
 
 	// 0x1b - Power off interface TLV
 	null,
@@ -1109,9 +1107,7 @@ const TLVEncoder = [
 	null,
 
 	// 0x1e - L2 neighbor device TLV
-	(local_address, remote_addresses) => {
-		const model = require('u1905.model');
-
+	(local_address, remote_addresses, local_devices) => {
 		let fmt = '!B';
 		let val = [ 1 ];
 
@@ -1127,7 +1123,7 @@ const TLVEncoder = [
 			fmt += '6sH';
 			push(val, hexdec(mac, ':'), 0);
 
-			for (let i1905dev in model.getDevices()) {
+			for (let i1905dev in local_devices) {
 				let i1905rif = i1905dev.lookupInterface(mac);
 
 				if (!i1905rif)
@@ -1185,11 +1181,11 @@ const TLVEncoder = [
 			val[2]++;
 		}
 
-		return struct.pack(fmt, ...val);
+		return pack(fmt, ...val);
 	}
 ];
 
-return {
+export default {
 	create: function(type, payload) {
 		if (type < 0 || type > 0xff || length(payload) > 0xffff)
 			return null;
@@ -1202,7 +1198,7 @@ return {
 	},
 
 	parse: function(data, offset) {
-		let v = struct.unpack('!BH', data, offset);
+		let v = unpack('!BH', data, offset);
 
 		if (!v || v[1] + 3 > length(data))
 			return null;

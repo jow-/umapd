@@ -17,16 +17,16 @@
 
 'use strict';
 
-const uloop = require('uloop');
+import * as uloop from 'uloop';
 
-const socket = require('u1905.socket');
-const cmdu = require('u1905.cmdu');
-const lldp = require('u1905.lldp');
-const utils = require('u1905.utils');
-const model = require('u1905.model');
-const defs = require('u1905.defs');
-const ubus = require('u1905.ubus');
-const log = require('u1905.log');
+import socket from 'u1905.socket';
+import cmdu from 'u1905.cmdu';
+import lldp from 'u1905.lldp';
+import utils from 'u1905.utils';
+import model from 'u1905.model';
+import defs from 'u1905.defs';
+import ubus from 'u1905.ubus';
+import log from 'u1905.log';
 
 function srcmac_to_almac(address) {
 	let i1905dev = model.lookupDevice(address);
@@ -277,7 +277,7 @@ function handle_lldp_input(flags) {
 function update_self() {
 	this.set(5000);
 
-	model.updateSelf();
+	model.updateSelf(ubus.call('network.interface', 'dump')?.interface ?? []);
 }
 
 function cleanup_model() {

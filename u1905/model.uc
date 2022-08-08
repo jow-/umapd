@@ -14,18 +14,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-const nl80211 = require('nl80211');
-const struct = require('struct');
-const rtnl = require('rtnl');
-const fs = require('fs');
+import { request as wlrequest, 'const' as wlconst } from 'nl80211';
+import { request as rtrequest, 'const' as rtconst } from 'rtnl';
+import { unpack } from 'struct';
+import { readfile } from 'fs';
 
-const socket = require('u1905.socket');
-const utils = require('u1905.utils');
-const cmdu = require('u1905.cmdu');
-const tlv = require('u1905.tlv');
-const log = require('u1905.log');
-const ubus = require('u1905.ubus');
-const defs = require('u1905.defs');
+import socket from 'u1905.socket';
+import utils from 'u1905.utils';
+import cmdu from 'u1905.cmdu';
+import tlv from 'u1905.tlv';
+import log from 'u1905.log';
+import defs from 'u1905.defs';
 
 function timems() {
 	let tv = clock(true) ?? clock(false);
@@ -37,7 +36,7 @@ function resolve_bridge_ports(ifname) {
 	let upper = ifname;
 
 	while (true) {
-		link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: upper });
+		link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: upper });
 
 		if (!link)
 			return null;
@@ -59,17 +58,17 @@ function resolve_bridge_ports(ifname) {
 	let links = [];
 
 	if (bridge) {
-		let bridge_links = rtnl.request(
-			rtnl.const.RTM_GETLINK,
-			rtnl.const.NLM_F_DUMP|rtnl.const.NLM_F_STRICT_CHK,
+		let bridge_links = rtrequest(
+			rtconst.RTM_GETLINK,
+			rtconst.NLM_F_DUMP|rtconst.NLM_F_STRICT_CHK,
 			{ master: bridge }
 		);
 
 		if (vlan) {
-			let bridge_vlans = rtnl.request(
-				rtnl.const.RTM_GETLINK,
-				rtnl.const.NLM_F_DUMP, {
-				family: rtnl.const.AF_BRIDGE,
+			let bridge_vlans = rtrequest(
+				rtconst.RTM_GETLINK,
+				rtconst.NLM_F_DUMP, {
+				family: rtconst.AF_BRIDGE,
 				ext_mask: 2
 			});
 
@@ -82,7 +81,7 @@ function resolve_bridge_ports(ifname) {
 						if (vi.vid > vlan || (vi.vid_end ?? vi.vid) < vlan)
 							continue;
 
-						if (vi.flags & rtnl.const.BRIDGE_VLAN_INFO_UNTAGGED)
+						if (vi.flags & rtconst.BRIDGE_VLAN_INFO_UNTAGGED)
 							push(links, { ifname: link.ifname, address: link.address });
 						else
 							push(links, { ifname: link.ifname, address: link.address, vlan });
@@ -229,7 +228,7 @@ const I1905LocalInterface = proto({
 		let info = this.getRuntimeInformation();
 
 		if (info.ipaddrs === null) {
-			let addrs = rtnl.request(rtnl.const.RTM_GETADDR, rtnl.const.NLM_F_DUMP|rtnl.const.NLM_F_STRICT_CHK, { dev: this.ifname, family: rtnl.const.AF_INET });
+			let addrs = rtrequest(rtconst.RTM_GETADDR, rtconst.NLM_F_DUMP|rtconst.NLM_F_STRICT_CHK, { dev: this.ifname, family: rtconst.AF_INET });
 			let ifstat;
 
 			for (let s in ifstatus?.interface) {
@@ -242,7 +241,7 @@ const I1905LocalInterface = proto({
 			info.ipaddrs = [];
 
 			for (let addr in addrs) {
-				if (addr.family != rtnl.const.AF_INET)
+				if (addr.family != rtconst.AF_INET)
 					continue;
 
 				let ip_mask_type_dhcp = split(addr.address, '/');
@@ -276,7 +275,7 @@ const I1905LocalInterface = proto({
 		let info = this.getRuntimeInformation();
 
 		if (info.ip6addrs === null) {
-			let addrs = rtnl.request(rtnl.const.RTM_GETADDR, rtnl.const.NLM_F_DUMP|rtnl.const.NLM_F_STRICT_CHK, { dev: this.ifname, family: rtnl.const.AF_INET6 });
+			let addrs = rtrequest(rtconst.RTM_GETADDR, rtconst.NLM_F_DUMP|rtconst.NLM_F_STRICT_CHK, { dev: this.ifname, family: rtconst.AF_INET6 });
 			let ifstat;
 
 			for (let s in ifstatus?.interface) {
@@ -289,7 +288,7 @@ const I1905LocalInterface = proto({
 			info.ip6addrs = [ [ '::', 0, 0, '::' ] ];
 
 			for (let addr in addrs) {
-				if (addr.family != rtnl.const.AF_INET6)
+				if (addr.family != rtconst.AF_INET6)
 					continue;
 
 				// skip expired addresses
@@ -331,7 +330,7 @@ const I1905LocalInterface = proto({
 				// On unavailable ubus state, try to guess SLAAC state */
 				if (ip_mask_type_origin[2] == 0 &&
 				    addr.cacheinfo.valid < 4294967295 /* address expires */ &&
-				    !(addr.flags & rtnl.const.IFA_F_PERMANENT) /* address is not permanent */) {
+				    !(addr.flags & rtconst.IFA_F_PERMANENT) /* address is not permanent */) {
 					if (ip_mask_type_origin[1] == 64)
 						ip_mask_type_origin[2] = 3; /* SLAAC */
 					else
@@ -377,10 +376,10 @@ const I1905LocalInterface = proto({
 			return this.info;
 
 		let ifname = this.i1905txsock.ifname,
-		    link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: ifname }),
-		    wifi = nl80211.request(nl80211.const.NL80211_CMD_GET_INTERFACE, 0, { dev: ifname }),
-		    wphy = nl80211.request(nl80211.const.NL80211_CMD_GET_WIPHY, 0, { dev: ifname }),
-		    wsta = nl80211.request(nl80211.const.NL80211_CMD_GET_STATION, nl80211.const.NLM_F_DUMP, { dev: ifname });
+		    link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: ifname }),
+		    wifi = wlrequest(wlconst.NL80211_CMD_GET_INTERFACE, 0, { dev: ifname }),
+		    wphy = wlrequest(wlconst.NL80211_CMD_GET_WIPHY, 0, { dev: ifname }),
+		    wsta = wlrequest(wlconst.NL80211_CMD_GET_STATION, wlconst.NLM_F_DUMP, { dev: ifname });
 
 		if (!link)
 			return null;
@@ -390,8 +389,8 @@ const I1905LocalInterface = proto({
 			address: link.address,
 			statistics: link.stats64,
 			bridge: (link.linkinfo?.slave?.type == 'bridge') ? link.master : null,
-			speed: +fs.readfile(`/sys/class/net/${ifname}/speed`),
-			mtu: +fs.readfile(`/sys/class/net/${ifname}/mtu`),
+			speed: +readfile(`/sys/class/net/${ifname}/speed`),
+			mtu: +readfile(`/sys/class/net/${ifname}/mtu`),
 			wifi: (wifi && wphy) ? {
 				phy: wphy,
 				interface: wifi,
@@ -763,7 +762,7 @@ const I1905Device = proto({
 	}
 }, I1905Entity);
 
-return proto({
+export default proto({
 	address: '00:00:00:00:00:00',
 	interfaces: {},
 	devices: [],
@@ -780,7 +779,7 @@ return proto({
 				mac = i1905lif.address;
 
 		/* ... hash its bytes ... */
-		mac = struct.unpack('!6B', hexdec(mac, ':'));
+		mac = unpack('!6B', hexdec(mac, ':'));
 
 		hash = ((hash << 5) + hash) + mac[0];
 		hash = ((hash << 5) + hash) + mac[1];
@@ -804,7 +803,7 @@ return proto({
 		let vlan;
 
 		while (true) {
-			let link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: upper });
+			let link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: upper });
 
 			if (!link)
 				return null;
@@ -887,7 +886,7 @@ return proto({
 		return [ ...this.devices ];
 	},
 
-	updateSelf: function() {
+	updateSelf: function(ifstatus) {
 		let i1905dev = this.addDevice(this.address);
 		let bridges = {};
 		let tlvs = [];
@@ -895,8 +894,7 @@ return proto({
 		let i1905neighs = [];
 		let i1905macs = [];
 
-		let neightbl = rtnl.request(rtnl.const.RTM_GETNEIGH, rtnl.const.NLM_F_DUMP) ?? [];
-		let ifstatus = ubus.call('network.interface', 'dump')?.interface ?? [];
+		let neightbl = rtrequest(rtconst.RTM_GETNEIGH, rtconst.NLM_F_DUMP) ?? [];
 
 		for (let i1905neigh in this.devices)
 			if (i1905neigh.isIEEE1905())
@@ -937,10 +935,10 @@ return proto({
 					if (neigh.dev != info.ifname)
 						continue;
 
-					if (neigh.type != rtnl.const.RTN_UNICAST)
+					if (neigh.type != rtconst.RTN_UNICAST)
 						continue;
 
-					if (neigh.state != rtnl.const.NUD_REACHABLE && neigh.state != rtnl.const.NUD_PERMANENT)
+					if (neigh.state != rtconst.NUD_REACHABLE && neigh.state != rtconst.NUD_PERMANENT)
 						continue;
 
 					if (!(neigh.lladdr in l2devs))
@@ -976,7 +974,7 @@ return proto({
 				push(tlvs, tlv.encode(defs.TLV_NON1905_NEIGHBOR_DEVICES, info.address, others));
 
 			if (l2devs)
-				push(tlvs, tlv.encode(defs.TLV_L2_NEIGHBOR_DEVICE, info.address, l2devs));
+				push(tlvs, tlv.encode(defs.TLV_L2_NEIGHBOR_DEVICE, info.address, l2devs, this.getDevices()));
 		}
 
 		for (let i1905neigh in i1905neighs) {
@@ -1007,7 +1005,7 @@ return proto({
 		push(tlvs,
 			tlv.encode(defs.TLV_IPV4, i1905lifs, ifstatus),
 			tlv.encode(defs.TLV_IPV6, i1905lifs, ifstatus),
-			tlv.encode(defs.TLV_DEVICE_INFORMATION, i1905lifs),
+			tlv.encode(defs.TLV_DEVICE_INFORMATION, i1905lifs, this.address),
 			tlv.encode(defs.TLV_DEVICE_IDENTIFICATION, null, null, null),
 			tlv.encode(defs.TLV_DEVICE_BRIDGING_CAPABILITY, values(bridges)),
 			tlv.encode(defs.TLV_CONTROL_URL, 'http://192.168.1.1' /* FIXME */),

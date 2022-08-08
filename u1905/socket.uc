@@ -14,12 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-const struct = require('struct');
-const rtnl = require('rtnl');
+import { request as rtrequest, 'const' as rtconst } from 'rtnl';
+import { socket, error as sockerr } from 'u1905.socket.raw';
+import { pack } from 'struct';
 
-const rawsock = require('u1905.socket.raw');
-const utils = require('u1905.utils');
-const log = require('u1905.log');
+import utils from 'u1905.utils';
+import log from 'u1905.log';
 
 let err;
 
@@ -29,7 +29,7 @@ function failure(msg) {
 	return null;
 }
 
-return {
+export default {
 	const: {
 		ETH_P_8021Q: 0x8100,
 		ETH_P_LLDP:  0x88cc,
@@ -49,7 +49,7 @@ return {
 		let address, bridge;
 
 		while (true) {
-			let link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: upper });
+			let link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: upper });
 
 			if (!link)
 				return failure('No such interface');
@@ -69,10 +69,10 @@ return {
 			break;
 		}
 
-		let sock = rawsock.socket(ifname, ethproto);
+		let sock = socket(ifname, ethproto);
 
 		if (!sock)
-			return failure(rawsock.error());
+			return failure(sockerr());
 
 		return proto({
 			address, ifname, bridge, vlan,
@@ -88,9 +88,9 @@ return {
 		    frame;
 
 		if (this.vlan)
-			frame = struct.pack('!6s6sHHH*', dmac, smac, this.const.ETH_P_8021Q, this.vlan, this.protocol, data);
+			frame = pack('!6s6sHHH*', dmac, smac, this.const.ETH_P_8021Q, this.vlan, this.protocol, data);
 		else
-			frame = struct.pack('!6s6sH*', dmac, smac, this.protocol, data);
+			frame = pack('!6s6sH*', dmac, smac, this.protocol, data);
 
 		return this.socket.send(dest, frame);
 	},
@@ -99,7 +99,7 @@ return {
 		let frame = this.socket.recv();
 
 		if (!frame)
-			return failure(rawsock.error());
+			return failure(sockerr());
 
 		let dstmac = utils.ether_ntoa(frame, 0);
 		let srcmac = utils.ether_ntoa(frame, 6);
@@ -111,7 +111,7 @@ return {
 
 		if (this.bridge) {
 			let search = {
-				family: rtnl.const.AF_BRIDGE,
+				family: rtconst.AF_BRIDGE,
 				master: this.bridge,
 				lladdr: srcmac
 			};
@@ -119,13 +119,13 @@ return {
 			if (this.vlan)
 				search.vlan = this.vlan;
 
-			let neigh = rtnl.request(rtnl.const.RTM_GETNEIGH, 0, search);
+			let neigh = rtrequest(rtconst.RTM_GETNEIGH, 0, search);
 
 			if (neigh) {
 				let rxdev = ifcname = neigh.dev;
 
 				if (!this.ports[rxdev]) {
-					let link = rtnl.request(rtnl.const.RTM_GETLINK, 0, { dev: rxdev });
+					let link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: rxdev });
 
 					if (link)
 						ifcmac = this.ports[rxdev] = link.address;
