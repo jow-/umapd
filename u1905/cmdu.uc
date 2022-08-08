@@ -221,6 +221,13 @@ return {
 			defs.getCMDUTypeName(this.type) ?? 'Unknown Type', this.type,
 			this.mid);
 
+		for (let tlv in this.tlvs)
+			if (tlv.type != 0)
+				log.debug('  TLV %02x (%s) - %d byte',
+					tlv.type,
+					defs.getTLVTypeName(tlv.type),
+					tlv.length);
+
 		if (this.tlvs[-1]?.type != 0)
 			this.add_tlv(0);
 
