@@ -22,7 +22,9 @@ let ubusconn = null;
 
 const I1905UbusProcedures = {
 	get_intf_list: {
-		args: {},
+		args: {
+			ubus_rpc_session: "00000000000000000000000000000000"
+		},
 		call: function(req) {
 			let interfaces = [];
 
@@ -43,6 +45,7 @@ const I1905UbusProcedures = {
 
 	get_metric: {
 		args: {
+			ubus_rpc_session: "00000000000000000000000000000000",
 			macaddress: "00:00:00:00:00:00"
 		},
 		call: function(req) {
@@ -96,7 +99,9 @@ const I1905UbusProcedures = {
 	},
 
 	get_topology: {
-		args: {},
+		args: {
+			ubus_rpc_session: "00000000000000000000000000000000"
+		},
 		call: function(req) {
 			let res = {
 				devices: [],
@@ -128,6 +133,32 @@ const I1905UbusProcedures = {
 			}
 
 			return req.reply(res);
+		}
+	},
+
+	dump_database: {
+		args: {
+			ubus_rpc_session: "00000000000000000000000000000000"
+		},
+		call: function(req) {
+			let devices = {};
+
+			for (let i1905dev in model.getDevices()) {
+				let rec = {};
+
+				for (let tlvtype, tlvs in i1905dev.tlvs) {
+					let k = defs.getTLVTypeName(tlvtype);
+
+					rec[k] = [];
+
+					for (let i = 1; i < length(tlvs); i++)
+						push(rec[k], hexenc(tlvs[i]));
+				}
+
+				devices[i1905dev.al_address] = rec;
+			}
+
+			return req.reply({ devices });
 		}
 	}
 };
