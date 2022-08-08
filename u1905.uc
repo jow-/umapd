@@ -284,6 +284,12 @@ function update_self() {
 	model.updateSelf();
 }
 
+function cleanup_model() {
+	this.set(5000);
+
+	model.collectGarbage();
+}
+
 function emit_topology_discovery() {
 	this.set(60000);
 
@@ -342,6 +348,7 @@ if (!ubus.publish())
 uloop.timer(250, update_self);
 uloop.timer(500, emit_topology_discovery);
 uloop.timer(1000, emit_topology_notification);
+uloop.timer(5000, cleanup_model);
 
 uloop.run();
 
