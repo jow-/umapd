@@ -604,7 +604,11 @@ const I1905Device = proto({
 						rx_packets: 0,
 						tx_errors: 0,
 						tx_packets: 0,
-						is_bridge: false
+						is_bridge: false,
+						rssi: 255,
+						availability: 100,
+						throughput: 0,
+						speed: 0
 					});
 
 					m.media_type ??= link.media_type;
