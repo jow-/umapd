@@ -42,6 +42,13 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		defs.getCMDUTypeName(msg.type) ?? 'Unknown Type', msg.type,
 		msg.mid);
 
+	for (let tlv in msg.tlvs)
+		if (tlv.type != 0)
+			log.debug('  TLV %02x (%s) - %d byte',
+				tlv.type,
+				defs.getTLVTypeName(tlv.type),
+				tlv.length);
+
 	// ignore packets looped back to us
 	if (al_mac == model.address) {
 		log.warn(`Ignoring CMDU originating from our AL MAC (network loop?)`);
