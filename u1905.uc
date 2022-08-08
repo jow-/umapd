@@ -157,33 +157,29 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		i1905dev.updateTLVs(msg.tlvs);
 	}
 	else if (msg.type == defs.MSG_LINK_METRIC_RESPONSE) {
+		let tlvs_by_al_address;
+
 		for (let tlv in msg.tlvs) {
-			if (tlv.type == defs.TLV_LINK_METRIC_RX) {
-				let rx_metrics = tlv.decode();
+			if (tlv.type != defs.TLV_LINK_METRIC_RX && tlv.type != defs.TLV_LINK_METRIC_TX)
+				continue;
 
-				if (!rx_metrics) {
-					log.warn(`Ignoring malformed metrics reply CMDU`);
-					return;
-				}
+			let metrics = tlv.decode();
 
-				let i1905dev = model.lookupDevice(rx_metrics.al_address);
-
-				if (i1905dev)
-					i1905dev.updateTLVs([ tlv ]);
+			if (!metrics) {
+				log.warn(`Ignoring malformed metrics reply CMDU`);
+				return;
 			}
-			else if (tlv.type == defs.TLV_LINK_METRIC_TX) {
-				let tx_metrics = tlv.decode();
 
-				if (!tx_metrics) {
-					log.warn(`Ignoring malformed metrics reply CMDU`);
-					return;
-				}
+			tlvs_by_al_address ??= {};
+			tlvs_by_al_address[metrics.al_address] ??= [];
+			push(tlvs_by_al_address[metrics.al_address], tlv);
+		}
 
-				let i1905dev = model.lookupDevice(tx_metrics.al_address);
+		for (let al_address, tlvs in tlvs_by_al_address) {
+			let i1905dev = model.lookupDevice(al_address);
 
-				if (i1905dev)
-					i1905dev.updateTLVs([ tlv ]);
-			}
+			if (i1905dev)
+				i1905dev.updateTLVs(tlvs);
 		}
 	}
 	else if (msg.type == defs.MSG_HIGHER_LAYER_QUERY) {
