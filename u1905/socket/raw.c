@@ -152,8 +152,10 @@ u1905_socket_recv(uc_vm_t *vm, size_t nargs)
 
 	rlen = recvfrom((*sk)->sock, buf->buf + buf->bpos, 1518, 0, NULL, NULL);
 
-	if (rlen == -1)
+	if (rlen == -1) {
+		printbuf_free(buf);
 		err_return(errno, "Failed to receive buffer contents");
+	}
 
 	buf->bpos += rlen;
 
