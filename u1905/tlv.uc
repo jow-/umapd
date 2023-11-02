@@ -1000,7 +1000,7 @@ const TLVEncoder = [
 
 		let osrel = open('/etc/os-release', 'r');
 		if (osrel) {
-			for (let line = osrel.read('line'); line != ''; line = osrel.read('line')) {
+			for (let line = osrel.read('line'); length(line); line = osrel.read('line')) {
 				let kv = match(line, '^([^=]+)="(.+)"\n?$');
 
 				switch (kv?.[0]) {
