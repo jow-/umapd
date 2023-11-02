@@ -19,7 +19,6 @@ import model from 'u1905.model';
 
 import { connect as ubus_connect, error as ubus_error } from 'ubus';
 
-let model = null;
 let ubusconn = null;
 
 const I1905UbusProcedures = {
