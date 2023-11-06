@@ -103,7 +103,8 @@ export default {
 		[0x0104]: 'IEEE 802.11n (5 GHz)',
 		[0x0105]: 'IEEE 802.11ac (5 GHz)',
 		[0x0106]: 'IEEE 802.11ad (60 GHz)',
-		[0x0107]: 'IEEE 802.11af (whitespace)',
+		[0x0107]: 'IEEE 802.11ax (2.4 GHz)',
+		[0x0108]: 'IEEE 802.11ax (5 GHz)',
 
 		[0x0200]: 'IEEE 1901 wavelet',
 		[0x0201]: 'IEEE 1901 FFT',
