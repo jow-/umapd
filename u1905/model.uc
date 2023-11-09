@@ -497,6 +497,14 @@ const I1905Device = proto({
 			case defs.TLV_IPV6:
 			case defs.TLV_1905_PROFILE_VERSION:
 			case defs.TLV_DEVICE_IDENTIFICATION:
+			case defs.TLV_SUPPORTEDSERVICE:
+			case defs.TLV_SEARCHEDSERVICE:
+			case defs.TLV_AP_RADIO_IDENTIFIER:
+			case defs.TLV_AP_OPERATIONAL_BSS:
+			case defs.TLV_ASSOCIATED_CLIENTS:
+			case defs.TLV_AP_METRICS:
+			case defs.TLV_MULTI_AP_PROFILE:
+			case defs.TLV_PROFILE_2_AP_CAPABILITY:
 				if (!this.tlvs[tlv.type]) {
 					this.tlvs[tlv.type] = [ now ];
 				}
@@ -714,6 +722,57 @@ const I1905Device = proto({
 				//	res.ipv6 ??= [];
 				//	push(res.ipv6, ...tlv.decode(+type, tlvs[i]));
 				//	break;
+
+				case defs.TLV_SUPPORTEDSERVICE:
+					res.map ??= {};
+					res.map.supported_services = tlv.decode(+type, tlvs[i]);
+					break;
+
+				case defs.TLV_SUPPORTEDSERVICE:
+					res.map ??= {};
+					res.map.searched_services = tlv.decode(+type, tlvs[i]);
+					break;
+
+				case defs.TLV_AP_OPERATIONAL_BSS:
+					res.map ??= {};
+					res.map.ap_operational_bss = tlv.decode(+type, tlvs[i]);
+					break;
+
+				case defs.TLV_AP_RADIO_IDENTIFIER:
+					res.map ??= {};
+					res.map.ap_radio_identifier = tlv.decode(+type, tlvs[i]);
+					break;
+
+				case defs.TLV_ASSOCIATED_CLIENTS:
+					for (let bss in tlv.decode(+type, tlvs[i])) {
+						for (let client in bss.clients) {
+							res.neighbors ??= {};
+							res.neighbors.others ??= {};
+							push(res.neighbors.others[bss.bssid] ??= [], client.mac);
+
+							res.map ??= {};
+							res.map.associated_clients ??= {};
+							push(res.map.associated_clients[bss.bssid] ??= [], client);
+						}
+					}
+
+					break;
+
+				case defs.TLV_AP_METRICS:
+					res.map ??= {};
+					res.map.ap_metrics = tlv.decode(+type, tlvs[i]);
+					break;
+
+				case defs.TLV_MULTI_AP_PROFILE:
+					res.map ??= {};
+					for (let k, v in tlv.decode(+type, tlvs[i]))
+						res.map[k] = v;
+					break;
+
+				case defs.TLV_PROFILE_2_AP_CAPABILITY:
+					res.map ??= {};
+					res.map.capabilities = tlv.decode(+type, tlvs[i]);
+					break;
 				}
 			}
 		}

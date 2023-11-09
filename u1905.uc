@@ -98,9 +98,9 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		query.send(i1905lif.i1905txsock, i1905lif.address, al_mac);
 	}
 	else if (msg.type == defs.MSG_TOPOLOGY_QUERY) {
-		al_mac = srcmac_to_almac(srcmac);
+		let i1905dev = model.lookupDevice(srcmac);
 
-		if (!al_mac) {
+		if (!i1905dev) {
 			log.warn('Ignoring topology query from unknown device %s', srcmac);
 			return;
 		}
@@ -115,7 +115,10 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 			defs.TLV_L2_NEIGHBOR_DEVICE
 		));
 
-		reply.send(i1905lif.i1905txsock, dstmac, al_mac);
+		reply.send(i1905lif.i1905txsock, dstmac, i1905dev.al_address);
+
+		i1905dev.updateTLVs(filter(msg.tlvs,
+			tlv => tlv.type in [ defs.TLV_MULTI_AP_PROFILE, defs.TLV_PROFILE_2_AP_CAPABILITY ]));
 	}
 	else if (msg.type == defs.MSG_LINK_METRIC_QUERY) {
 		al_mac = srcmac_to_almac(srcmac);
@@ -208,6 +211,16 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 		if (i1905dev)
 			i1905dev.updateTLVs(msg.tlvs);
+	}
+	else if (msg.type == defs.MSG_COMBINED_INFRASTRUCTURE_METRICS) {
+		let i1905dev = model.lookupDevice(srcmac);
+
+		if (!i1905dev) {
+			log.warn('Ignoring infrastructure metrics from unknown device %s', srcmac);
+			return;
+		}
+
+		i1905dev.updateTLVs(msg.tlvs);
 	}
 
 	if (msg.flags & defs.CMDU_F_ISRELAY) {

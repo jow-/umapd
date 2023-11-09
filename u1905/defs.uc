@@ -40,6 +40,7 @@ export default {
 	MSG_IF_POWER_CHANGE_RESPONSE: 0x0010,
 	MSG_GENERIC_PHY_QUERY: 0x0011,
 	MSG_GENERIC_PHY_RESPONSE: 0x0012,
+	MSG_COMBINED_INFRASTRUCTURE_METRICS: 0x8013,
 
 	TLV_END_OF_MESSAGE: 0x0000,
 	TLV_AL_MAC_ADDRESS: 0x0001,
@@ -71,6 +72,14 @@ export default {
 	TLV_INTERFACE_POWER_CHANGE_INFORMATION: 0x001c,
 	TLV_INTERFACE_POWER_CHANGE_STATUS: 0x001d,
 	TLV_L2_NEIGHBOR_DEVICE: 0x001e,
+	TLV_SUPPORTEDSERVICE: 0x0080,
+	TLV_SEARCHEDSERVICE: 0x0081,
+	TLV_AP_RADIO_IDENTIFIER: 0x0082,
+	TLV_AP_OPERATIONAL_BSS: 0x0083,
+	TLV_ASSOCIATED_CLIENTS: 0x0084,
+	TLV_AP_METRICS: 0x0094,
+	TLV_MULTI_AP_PROFILE: 0x00b3,
+	TLV_PROFILE_2_AP_CAPABILITY: 0x00b4,
 
 	LINK_METRIC_RESULT_CODES: {
 		[0x00]: 'Invalid neighbor'
@@ -157,6 +166,27 @@ export default {
 		[0x02]: 'Alternative change made'
 	},
 
+	SUPPORTED_SERVICES: {
+		[0x00]: 'Multi-AP Controller',
+		[0x01]: 'Multi-AP Agent'
+	},
+
+	SEARCHED_SERVICES: {
+		[0x00]: 'Multi-AP Controller'
+	},
+
+	MULTI_AP_PROFILES: {
+		[0x00]: 'Reserved',
+		[0x01]: 'Multi-AP Profile 1',
+		[0x02]: 'Multi-AP Profile 2',
+		[0x03]: 'Multi-AP Profile 3'
+	},
+
+	PROFILE_2_BYTE_COUNTER_UNIT: {
+		[0x00]: 'bytes',
+		[0x01]: 'kibibytes',
+		[0x02]: 'mebibytes'
+	},
 
 	getCMDUTypeName: function(type) {
 		for (let k, v in this)

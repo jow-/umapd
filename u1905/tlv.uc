@@ -19,6 +19,7 @@ import { pack, unpack } from 'struct';
 
 import utils from 'u1905.utils';
 import defs from 'u1905.defs';
+import log from 'u1905.log';
 
 
 function encode_local_interface(i1905lif) {
@@ -124,6 +125,17 @@ function decode_media_info(media_type, media_info) {
 	}
 
 	return null;
+}
+
+function skip(start, end) {
+	let a = [];
+
+	while (start <= end) {
+		push(a, null);
+		start++;
+	}
+
+	return a;
 }
 
 const TLVDecoder = [
@@ -799,6 +811,234 @@ const TLVDecoder = [
 		}
 
 		return res;
+	},
+
+	// 0x1f..0x7f - unassigned
+	...skip(0x1f, 0x7f),
+
+	// 0x80 - SupportedService TLV
+	(payload) => {
+		let len = length(payload);
+
+		if (len < 1)
+			return null;
+
+		let res = [];
+
+		for (let off = 0; off < len; off++) {
+			let supported_service = ord(payload, off);
+			let supported_service_name = defs.SUPPORTED_SERVICES[supported_service];
+
+			if (!supported_service_name)
+				return null;
+
+			push(res, {
+				supported_service,
+				supported_service_name
+			});
+		}
+
+		return res;
+	},
+
+	// 0x81 - SearchedService TLV
+	(payload) => {
+		let len = length(payload);
+
+		if (len < 1)
+			return null;
+
+		let res = [];
+
+		for (let off = 0; off < len; off++) {
+			let searched_service = ord(payload, off);
+			let searched_service_name = defs.SEARCHED_SERVICES[searched_service];
+
+			if (!searched_service_name)
+				return null;
+
+			push(res, {
+				searched_service,
+				searched_service_name
+			});
+		}
+
+		return res;
+	},
+
+	// 0x82 - AP Radio Identifier TLV
+	(payload) => payload,
+
+	// 0x83 - AP OPerational BSS TLV
+	(payload) => {
+		let len = length(payload);
+
+		if (len < 1)
+			return null;
+
+		let num_radios = ord(payload, 0);
+		let res = [];
+
+		for (let i = 0, off = 1; i < num_radios && off < len; i++) {
+			if (off + 7 > len)
+				return null;
+
+			let radio_unique_id = utils.ether_ntoa(payload, off);
+			let num_bsses = ord(payload, off + 6);
+
+			off += 7;
+
+			push(res, {
+				radio_unique_id,
+				bsses: []
+			});
+
+			for (let j = 0; j < num_bsses; j++) {
+				if (off + 7 > len)
+					return null;
+
+				let bssid = utils.ether_ntoa(payload, off);
+				let ssid_len = ord(payload, off + 6);
+
+				off += 7;
+
+				if (off + ssid_len > len)
+					return null;
+
+				let ssid = substr(payload, off, ssid_len);
+
+				off += ssid_len;
+
+				push(res[-1].bsses, {
+					bssid,
+					ssid
+				});
+			}
+		}
+
+		return res;
+	},
+
+	// 0x84 - Associated Clients TLV
+	(payload) => {
+		let len = length(payload);
+
+		if (len < 1)
+			return null;
+
+		let num_bsses = ord(payload, 0);
+		let res = [];
+
+		for (let i = 0, off = 1; i < num_bsses && off < len; i++) {
+			if (off + 8 > len)
+				return null;
+
+			let bssid = utils.ether_ntoa(payload, off);
+			let num_associated = unpack('!H', payload, off + 6)[0];
+
+			off += 8;
+
+			push(res, {
+				bssid,
+				clients: []
+			});
+
+			for (let j = 0; j < num_associated; j++) {
+				if (off + 8 > len)
+					return null;
+
+				let mac = utils.ether_ntoa(payload, off);
+				let last_seen = unpack('!H', payload, off + 6)[0];
+
+				off += 8;
+
+				push(res[-1].clients, {
+					mac,
+					last_seen
+				});
+			}
+		}
+
+		return res;
+	},
+
+	// 0x85..0x93 - unassigned
+	...skip(0x85, 0x93),
+
+	// 0x94 - AP Metrics TLV
+	(payload) => {
+		let len = length(payload);
+
+		if (len < 10)
+			return null;
+
+		let res = {
+			bssid: utils.ether_ntoa(payload, 0),
+			channel_utilization: ord(payload, 6),
+			num_associated: unpack('!H', payload, 7)[0],
+			esp_information: []
+		};
+
+		let off = 9;
+		let have_espinfo = ord(payload, off++);
+
+		for (let i = 0; i < 4 && off < len; i++) {
+			if (off + 3 > len)
+				return null;
+
+			let values = unpack('!BBB', payload, off);
+
+			off += 3;
+
+			push(res.esp_information, {
+				access_category: values[2] & 0x03,
+				data_format: (values[2] & 0x18) >> 3,
+				ba_window_size: (values[2] & 0xe0) >> 5,
+				data_ppdu_duration_target: values[0],
+				estimated_air_time_fraction: values[1]
+			});
+		}
+
+		return res;
+	},
+
+	// 0x95..0xb2 - unassigned
+	...skip(0x95, 0xb2),
+
+	// 0xb3 - Multi-AP Profile
+	(payload) => {
+		if (length(payload) != 1)
+			return null;
+
+		let profile = ord(payload, 0);
+		let profile_name = defs.MULTI_AP_PROFILES[profile];
+
+		return profile_name ? { profile, profile_name } : null;
+	},
+
+	// 0xb4 - Profile-2 AP Capability
+	(payload) => {
+		let len = length(payload);
+
+		if (len < 4)
+			return null;
+
+		let flags = ord(payload, 2);
+		let unit = (flags >> 6) & 0b11;
+		let unit_name = defs.PROFILE_2_BYTE_COUNTER_UNIT[unit];
+
+		if (!unit_name)
+			return null;
+
+		return {
+			max_priorization_rules: ord(payload, 0),
+			max_unique_vids: ord(payload, 3),
+			byte_counter_unit: unit,
+			byte_counter_unit_name: unit_name,
+			supports_traffic_separation: !!(flags & 0b00001000),
+			supports_dpp_onboarding: !!(flags & 0b00010000),
+			supports_priorization: !!(flags & 0b00100000),
+		};
 	}
 ];
 
