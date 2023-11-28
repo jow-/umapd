@@ -1,0 +1,11 @@
+{
+	"luci-app-u1905": {
+		"description": "Grant access to IEEE 1905 topology information",
+		"read": {
+			"ubus": {
+				"ieee1905": [ "get_topology" ],
+				"luci-rpc": [ "getHostHints" ]
+			}
+		}
+	}
+}

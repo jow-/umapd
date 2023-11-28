@@ -1,0 +1,13 @@
+{
+	"admin/status/u1905": {
+		"title": "IEEE 1905",
+		"order": 90,
+		"action": {
+			"type": "view",
+			"path": "u1905"
+		},
+		"depends": {
+			"acl": [ "luci-app-u1905" ]
+		}
+	}
+}
