@@ -144,7 +144,7 @@ export default {
 		push(fmt, "B");
 		push(val, tlv.channel_utilization);
 
-		push(fmt, "!H");
+		push(fmt, "H");
 		push(val, tlv.sta_count);
 
 		push(fmt, "B");

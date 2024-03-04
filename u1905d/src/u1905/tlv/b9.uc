@@ -87,7 +87,7 @@ export default {
 		if (type(tlv.always_match) != "bool")
 			return null;
 
-		push(fmt, "!L");
+		push(fmt, "L");
 		push(val, tlv.rule_id);
 
 		push(fmt, "B");

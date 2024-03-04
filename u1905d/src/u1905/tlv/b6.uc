@@ -88,7 +88,7 @@ export default {
 			push(fmt, "*");
 			push(val, item.ssid_name);
 
-			push(fmt, "!H");
+			push(fmt, "H");
 			push(val, item.vlan_id);
 
 		}

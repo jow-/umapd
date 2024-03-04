@@ -140,25 +140,25 @@ export default {
 		push(fmt, "6s");
 		push(val, mac_address);
 
-		push(fmt, "!L");
+		push(fmt, "L");
 		push(val, tlv.bytes_sent);
 
-		push(fmt, "!L");
+		push(fmt, "L");
 		push(val, tlv.bytes_received);
 
-		push(fmt, "!L");
+		push(fmt, "L");
 		push(val, tlv.packets_sent);
 
-		push(fmt, "!L");
+		push(fmt, "L");
 		push(val, tlv.packets_received);
 
-		push(fmt, "!L");
+		push(fmt, "L");
 		push(val, tlv.tx_packets_errors);
 
-		push(fmt, "!L");
+		push(fmt, "L");
 		push(val, tlv.rx_packets_errors);
 
-		push(fmt, "!L");
+		push(fmt, "L");
 		push(val, tlv.retransmission_count);
 
 		return pack(join("", fmt), ...val);

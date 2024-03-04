@@ -68,7 +68,7 @@ export default {
 		if (type(tlv.op_class) != "int" || tlv.op_class < 0 || tlv.op_class > 0xff)
 			return null;
 
-		push(fmt, "!H");
+		push(fmt, "H");
 		push(val, tlv.tlv_sub_type);
 
 		push(fmt, "B");

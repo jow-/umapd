@@ -179,10 +179,10 @@ export default {
 		push(fmt, "B");
 		push(val, tlv.srg_obsspd_max_offset);
 
-		push(fmt, "!Q");
+		push(fmt, "Q");
 		push(val, tlv.srg_bss_color_bitmap);
 
-		push(fmt, "!Q");
+		push(fmt, "Q");
 		push(val, tlv.srg_partial_bssid_bitmap);
 
 		return pack(join("", fmt), ...val);

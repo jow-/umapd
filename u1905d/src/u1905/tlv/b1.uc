@@ -206,7 +206,7 @@ export default {
 			push(fmt, "B");
 			push(val, item.channel);
 
-			push(fmt, "!H");
+			push(fmt, "H");
 			push(val, item.minutes);
 
 		}
@@ -233,7 +233,7 @@ export default {
 			push(fmt, "B");
 			push(val, item.channel);
 
-			push(fmt, "!H");
+			push(fmt, "H");
 			push(val, item.duration);
 
 		}

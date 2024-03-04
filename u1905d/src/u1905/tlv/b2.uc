@@ -175,7 +175,7 @@ export default {
 		if (type(tlv.radios) != "array" || length(tlv.radios) > 0xff)
 			return null;
 
-		push(fmt, "!H");
+		push(fmt, "H");
 		push(val, tlv.country_code);
 
 		push(fmt, "B");

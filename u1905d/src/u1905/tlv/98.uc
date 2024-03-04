@@ -136,7 +136,7 @@ export default {
 			push(fmt, "B");
 			push(val, item.channel_number);
 
-			push(fmt, "!L");
+			push(fmt, "L");
 			push(val, item.time_delta);
 
 			push(fmt, "B");

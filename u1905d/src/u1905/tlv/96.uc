@@ -150,13 +150,13 @@ export default {
 			push(fmt, "6s");
 			push(val, bssid);
 
-			push(fmt, "!L");
+			push(fmt, "L");
 			push(val, item.time_delta);
 
-			push(fmt, "!L");
+			push(fmt, "L");
 			push(val, item.estimated_mac_data_rate);
 
-			push(fmt, "!L");
+			push(fmt, "L");
 			push(val, item.estimated_mac_data_rate2);
 
 			push(fmt, "B");

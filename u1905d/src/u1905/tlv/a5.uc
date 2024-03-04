@@ -155,7 +155,7 @@ export default {
 				| ((item.scan_impact & 0b11) << 5)
 			);
 
-			push(fmt, "!L");
+			push(fmt, "L");
 			push(val, item.minimum_scan_interval);
 
 			push(fmt, "B");

@@ -184,10 +184,10 @@ export default {
 			| (tlv.btm_abridged_bit << 5)
 		);
 
-		push(fmt, "!H");
+		push(fmt, "H");
 		push(val, tlv.steering_opportunity_window);
 
-		push(fmt, "!H");
+		push(fmt, "H");
 		push(val, tlv.btm_disassociation_timer);
 
 		push(fmt, "B");

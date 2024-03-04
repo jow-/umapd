@@ -58,7 +58,7 @@ export default {
 		if (type(tlv.default_pcp) != "int" || tlv.default_pcp < 0 || tlv.default_pcp > 0b111)
 			return null;
 
-		push(fmt, "!H");
+		push(fmt, "H");
 		push(val, tlv.primary_vlan_id);
 
 		push(fmt, "B");
