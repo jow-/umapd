@@ -70,7 +70,7 @@ export default {
 			if (offset + 2 >= len)
 				return null;
 
-			const opclass = ord(payload, offset++);
+			const _opclass = ord(payload, offset++);
 			const channels_count = ord(payload, offset++);
 
 			const channels = [];
@@ -88,7 +88,7 @@ export default {
 			}
 
 			push(opclass, {
-				opclass,
+				opclass: _opclass,
 				channels,
 			});
 		}
