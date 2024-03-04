@@ -188,6 +188,81 @@ export default {
 		[0x02]: 'mebibytes'
 	},
 
+	ASSOCIATION_ALLOWANCE_STATUS: {
+		[0x00]: 'No more associations allowed',
+		[0x01]: 'Associations allowed',
+	},
+
+	CAC_COMPLETION_STATUS: {
+		[0x00]: 'Successful',
+		[0x01]: 'Radar detected',
+		[0x02]: 'CAC not supported as requested (capability mismatch)',
+		[0x03]: 'Radio too busy to perform CAC',
+		[0x04]: 'Request was considered to be non-conformant to regulations in the country in which the Multi-AP Agent is operating',
+		[0x05]: 'Other error',
+	},
+
+	CAC_METHOD_SUPPORTED: {
+		[0x00]: 'Continuous CAC',
+		[0x01]: 'Continuous with dedicated radio',
+		[0x02]: 'MIMO dimension reduced',
+		[0x03]: 'Time sliced CAC',
+	},
+
+	CHANNEL_SELECTION_RESPONSE_CODE: {
+		[0x00]: 'Accept',
+		[0x01]: 'Decline because request violates current preferences which have changed since last reported',
+		[0x02]: 'Decline because request violates most recently reported preferences',
+		[0x03]: 'Decline because request would prevent operation of a currently operating backhaul link (where backhaul STA and BSS share a radio)',
+	},
+
+	REASON_CODE: {
+		[0x01]: 'STA associated with a BSS operated by the Multi-AP Agent.',
+		[0x02]: 'STA not associated with any BSS operated by the Multi-AP Agent.',
+		[0x03]: 'Client capability report unspecified failure',
+		[0x04]: 'Backhaul steering request rejected because the backhaul STA cannot operate on the channel specified.',
+		[0x05]: 'Backhaul steering request rejected because the target BSS signal is too weak or not found.',
+		[0x06]: 'Backhaul steering request authentication or association Rejected by the target BSS.',
+	},
+
+	RESPONSE_CODE: {
+		[0x00]: 'Accept',
+		[0x01]: 'Decline because radio does not support requested configuration.',
+	},
+
+	RESULT_CODE: {
+		[0x00]: 'Success',
+		[0x01]: 'Failure',
+	},
+
+	SCAN_IMPACT: {
+		[0x00]: 'No impact (independent radio is available for scanning that is not used for Fronthaul or backhaul)',
+		[0x01]: 'Reduced number of spatial streams',
+		[0x02]: 'Time slicing impairment (Radio may go off channel for a series of short intervals)',
+		[0x03]: 'Radio unavailable for >= 2 seconds)',
+	},
+
+	STEERING_POLICY: {
+		[0x00]: 'Agent Initiated Steering Disallowed',
+		[0x01]: 'Agent Initiated RCPI-based Steering Mandated',
+		[0x02]: 'Agent Initiated RCPI-based Steering Allowed',
+	},
+
+	SUPPORTED_SERVICE: {
+		[0x00]: 'Multi-AP Controller',
+		[0x01]: 'Multi-AP Agent',
+	},
+
+	TUNNELED_PROTOCOL_TYPE: {
+		[0x00]: 'Association Request',
+		[0x01]: 'Re-Association Request',
+		[0x02]: 'BTM Query',
+		[0x03]: 'WNM Request',
+		[0x04]: 'ANQP request for Neighbor Report',
+		[0x05]: 'DSCP Policy Query',
+		[0x06]: 'DSCP Policy Response',
+	},
+
 	getCMDUTypeName: function(type) {
 		for (let k, v in this)
 			if (index(k, 'MSG_') == 0 && v == type)
