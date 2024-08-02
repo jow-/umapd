@@ -17,6 +17,8 @@
 import { readfile, open } from 'fs';
 import { pack, unpack } from 'struct';
 
+import { encoder, decoder, extended_encoder, extended_decoder } from 'u1905.tlv.codec';
+
 import utils from 'u1905.utils';
 import defs from 'u1905.defs';
 import log from 'u1905.log';
@@ -1347,23 +1349,77 @@ const TLVEncoder = [
 	null,
 
 	// 0x1e - L2 neighbor device TLV
-	(local_address, remote_addresses, local_devices) => {
-		let fmt = '!B';
-		let val = [ 1 ];
+	(local_address, remote_addresses) => {
+		let localInterface = {
+			if_mac_address: local_address,
+			neighbors: map(remote_addresses, mac => {
+				let data;
 
-		fmt += '6sH';
-		push(val, hexdec(local_address, ':'), 0);
+				let neighbor_device = {
+					neighbor_mac_address: mac,
+					behind_mac_addresses: []
+				};
+
+				for (let i1905dev in this.getDevices()) {
+					let i1905rif = i1905dev.lookupInterface(mac);
+
+					if (!i1905rif)
+						continue;
+
+					let l2 = i1905dev.getTLVs(defs.TLV_L2_NEIGHBOR_DEVICE);
+
+					if (length(l2)) {
+						for (let tlv in l2) {
+							if ((data = decode_tlv(tlv.type, tlv.payload)) != null) {
+								for (let dev in data) {
+									if (dev.if_mac_address == mac)
+										continue;
+
+									for (let ndev in dev.neighbors) {
+										push(neighbor_device.behind_mac_addresses, ndev.neighbor_mac_address);
+									}
+								}
+							}
+						}
+					}
+					else {
+						let others = i1905dev.getTLVs(defs.TLV_NON_IEEE1905_NEIGHBOR_DEVICES);
+						let metrics = i1905dev.getTLVs(defs.TLV_IEEE1905_RECEIVER_LINK_METRIC);
+
+						for (let tlv in others) {
+							if ((data = decode_tlv(tlv.type, tlv.payload)) != null && data.local_if_mac_address != mac)
+								push(neighbor_device.behind_mac_addresses, ...data.non_ieee1905_neighbors);
+						}
+
+						for (let tlv in metrics) {
+							if ((data = decode_tlv(tlv.type, tlv.payload)) != null) {
+								for (let link in decode_tlv(tlv.type, tlv.payload).link_metrics) {
+									if (link.local_if_mac_address != mac)
+										push(neighbor_device.behind_mac_addresses, link.remote_if_mac_address);
+								}
+							}
+						}
+					}
+				}
+
+				return neighbor_device;
+			})
+		};
+
+		let data;
 
 		for (let i, mac in remote_addresses) {
 			if (i > 255)
 				break;
 
-			let off = length(val);
+			let neighbor_device = {
+				neighbor_mac_address: mac,
+				behind_mac_addresses: []
+			};
 
-			fmt += '6sH';
-			push(val, hexdec(mac, ':'), 0);
+			push(localInterface.neighbors, neighbor_device);
 
-			for (let i1905dev in local_devices) {
+			for (let i1905dev in this.getDevices()) {
 				let i1905rif = i1905dev.lookupInterface(mac);
 
 				if (!i1905rif)
@@ -1373,55 +1429,40 @@ const TLVEncoder = [
 
 				if (length(l2)) {
 					for (let tlv in l2) {
-						for (let dev in tlv.decode()) {
-							if (dev.local_address == mac)
-								continue;
+						if ((data = decode_tlv(tlv.type, tlv.payload)) != null) {
+							for (let dev in data) {
+								if (dev.if_mac_address == mac)
+									continue;
 
-							for (let ndev in dev.neighbor_devices) {
-								fmt += '6s';
-								push(val, hexdec(ndev.remote_address, ':'));
-
-								val[off + 1]++;
+								for (let ndev in dev.neighbors) {
+									push(neighbor_device.behind_mac_addresses, ndev.neighbor_mac_address);
+								}
 							}
 						}
 					}
 				}
 				else {
-					let others = i1905dev.getTLVs(defs.TLV_NON1905_NEIGHBOR_DEVICES);
-					let metrics = i1905dev.getTLVs(defs.TLV_LINK_METRIC_RX);
+					let others = i1905dev.getTLVs(defs.TLV_NON_IEEE1905_NEIGHBOR_DEVICES);
+					let metrics = i1905dev.getTLVs(defs.TLV_IEEE1905_RECEIVER_LINK_METRIC);
 
 					for (let tlv in others) {
-						let remote_addresses = tlv.decode();
-
-						if (!remote_addresses || remote_addresses[0] == mac)
-							continue;
-
-						for (let j = 1; j < length(remote_addresses); j++) {
-							fmt += '6s';
-							push(val, hexdec(remote_addresses[j], ':'));
-
-							val[off + 1]++;
-						}
+						if ((data = decode_tlv(tlv.type, tlv.payload)) != null && data.local_if_mac_address != mac)
+							push(neighbor_device.behind_mac_addresses, ...data.non_ieee1905_neighbors);
 					}
 
 					for (let tlv in metrics) {
-						for (let link in tlv.decode()?.links) {
-							if (link.local_address == mac)
-								continue;
-
-							fmt += '6s';
-							push(val, hexdec(link.remote_address, ':'));
-
-							val[off + 1]++;
+						if ((data = decode_tlv(tlv.type, tlv.payload)) != null) {
+							for (let link in decode_tlv(tlv.type, tlv.payload).link_metrics) {
+								if (link.local_if_mac_address != mac)
+									push(neighbor_device.behind_mac_addresses, link.remote_if_mac_address);
+							}
 						}
 					}
 				}
 			}
-
-			val[2]++;
 		}
 
-		return pack(fmt, ...val);
+		return localInterface;
 	}
 ];
 
@@ -1437,33 +1478,50 @@ export default {
 		}, this);
 	},
 
-	parse: function(data, offset) {
-		let v = unpack('!BH', data, offset);
+	parse: function(buf) {
+		let tlv_type = buf.get('B');
+		let tlv_len = buf.get('!H');
 
-		if (!v || v[1] + 3 > length(data))
+		if (tlv_type === null || tlv_len === null || buf.pos() + tlv_len > buf.length())
 			return null;
 
 		return proto({
-			type: v[0],
-			length: v[1],
-			payload: substr(data, offset + 3, v[1])
+			type: tlv_type,
+			length: tlv_len,
+			payload: buf.get(tlv_len)
 		}, this);
 	},
 
 	decode: function(type, payload) {
-		return TLVDecoder[type ?? this.type]?.(payload ?? this.payload);
+		type ??= this.type;
+		payload ??= this.payload;
+
+		if (type === defs.TLV_EXTENDED)
+			return extended_decoder[unpack('!H', payload)]?.(payload);
+
+		return decoder[type]?.(payload);
 	},
 
 	encode: function(type, ...args) {
-		let v = TLVEncoder[type]?.(...args);
+		let buf = buffer();
 
-		if (v == null)
+		if (type === defs.TLV_EXTENDED) {
+			let subtype = shift(args);
+
+			buf.put('!H', subtype);
+			buf = extended_encoder[subtype]?.(buf, ...args);
+		}
+		else {
+			buf = encoder[type]?.(buf, ...args);
+		}
+
+		if (buf == null)
 			return null;
 
 		return proto({
 			type,
-			length: length(v),
-			payload: v
+			length: buf.length(),
+			payload: buf.slice()
 		}, this);
 	}
 };

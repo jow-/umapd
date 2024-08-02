@@ -33,21 +33,35 @@ function srcmac_to_almac(address) {
 	return i1905dev?.al_address;
 }
 
-function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
-	let al_mac = msg.decode(defs.TLV_AL_MAC_ADDRESS);
+// FIXME: common helper
+function cmdu_name(type) {
+	for (let k, v in defs)
+		if (v === type && index(k, 'MSG_') === 0)
+			return substr(k, 4);
+}
 
-	log.debug('RX %-8s: %s > %s : %s (%04x) [%d]',
+// FIXME: common helper
+function tlv_name(type) {
+	for (let k, v in defs)
+		if (v === type && index(k, 'TLV_') === 0)
+			return substr(k, 4);
+}
+
+function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
+	let al_mac = msg.get_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS);
+
+	log.debug('RX %-8s: %s > %s : %04x (%s) [%d]',
 		i1905lif.ifname,
 		srcmac, dstmac,
-		defs.getCMDUTypeName(msg.type) ?? 'Unknown Type', msg.type,
+		msg.type, cmdu_name(msg.type) ?? 'Unknown Type',
 		msg.mid);
 
-	for (let tlv in msg.tlvs)
-		if (tlv.type != 0)
+	for (let i = 0; msg.tlvs[i] != null; i += 3)
+		if (msg.tlvs[i] != 0)
 			log.debug('  TLV %02x (%s) - %d byte',
-				tlv.type,
-				defs.getTLVTypeName(tlv.type),
-				tlv.length);
+				msg.tlvs[i],
+				tlv_name(msg.tlvs[i]),
+				msg.tlvs[i+2] - msg.tlvs[i+1]);
 
 	// ignore packets looped back to us
 	if (al_mac == model.address) {
@@ -56,7 +70,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 	}
 
 	if (msg.type == defs.MSG_TOPOLOGY_DISCOVERY) {
-		let if_mac = msg.decode(defs.TLV_MAC_ADDRESS);
+		let if_mac = msg.get_tlv(defs.TLV_MAC_ADDRESS);
 
 		if (!al_mac || !if_mac) {
 			log.warn(`Ignoring incomplete topology discovery CMDU`);
@@ -73,7 +87,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		    // and send a counter topology discovery message to speed
 		    // up the neighbour discovering us
 			query = cmdu.create(defs.MSG_TOPOLOGY_DISCOVERY);
-			query.add_tlv(defs.TLV_AL_MAC_ADDRESS, model.address);
+			query.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
 			query.add_tlv(defs.TLV_MAC_ADDRESS, i1905lif.address);
 			query.send(i1905lif.i1905txsock, i1905lif.address, al_mac);
 		}
@@ -90,7 +104,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 		// query link metrics
 		query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
-		query.add_tlv(defs.TLV_LINK_METRIC_QUERY, null /* model.address */, true, true);
+		query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
 		query.send(i1905lif.i1905txsock, i1905lif.address, al_mac);
 
 		// query higher layer info
@@ -107,18 +121,19 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 		let reply = cmdu.create(defs.MSG_TOPOLOGY_RESPONSE, msg.mid);
 
-		push(reply.tlvs, ...model.getLocalDevice().getTLVs(
-			defs.TLV_DEVICE_INFORMATION,
+		for (let tlv in model.getLocalDevice().getTLVs(
+			defs.TLV_IEEE1905_DEVICE_INFORMATION,
 			defs.TLV_DEVICE_BRIDGING_CAPABILITY,
 			defs.TLV_IEEE1905_NEIGHBOR_DEVICES,
 			defs.TLV_NON1905_NEIGHBOR_DEVICES,
 			defs.TLV_L2_NEIGHBOR_DEVICE
-		));
+		)) {
+			reply.add_tlv_raw(tlv.type, tlv.payload);
+		}
 
 		reply.send(i1905lif.i1905txsock, dstmac, i1905dev.al_address);
 
-		i1905dev.updateTLVs(filter(msg.tlvs,
-			tlv => tlv.type in [ defs.TLV_MULTI_AP_PROFILE, defs.TLV_PROFILE_2_AP_CAPABILITY ]));
+		i1905dev.updateTLVs(msg.get_tlvs_raw(defs.TLV_MULTI_AP_PROFILE, defs.TLV_PROFILE_2_AP_CAPABILITY));
 	}
 	else if (msg.type == defs.MSG_LINK_METRIC_QUERY) {
 		al_mac = srcmac_to_almac(srcmac);
@@ -128,7 +143,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 			return;
 		}
 
-		let requested_metrics = msg.decode(defs.TLV_LINK_METRIC_QUERY);
+		let requested_metrics = msg.get_tlv(defs.TLV_LINK_METRIC_QUERY);
 
 		if (!requested_metrics) {
 			log.warn(`Ignoring incomplete link metric query CMDU`);
@@ -138,44 +153,39 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		let reply = cmdu.create(defs.MSG_LINK_METRIC_RESPONSE, msg.mid);
 
 		for (let tlv in model.getLocalDevice().getTLVs(
-			defs.TLV_LINK_METRIC_TX,
-			defs.TLV_LINK_METRIC_RX
+			defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC,
+			defs.TLV_IEEE1905_RECEIVER_LINK_METRIC
 		)) {
 			if (requested_metrics.mac == null || utils.ether_ntoa(tlv.payload, 6) == requested_metrics.mac)
-				push(reply.tlvs, tlv);
+				reply.add_tlv_raw(tlv.type, tlv.payload);
 		}
 
 		reply.send(i1905lif.i1905txsock, dstmac, al_mac);
 	}
 	else if (msg.type == defs.MSG_TOPOLOGY_RESPONSE) {
-		let devinfo = msg.decode(defs.TLV_DEVICE_INFORMATION);
+		let devinfo = msg.get_tlv(defs.TLV_IEEE1905_DEVICE_INFORMATION);
 
 		if (!devinfo) {
 			log.warn(`Ignoring malformed topology response CMDU`);
 			return;
 		}
 
-		let i1905dev = model.addDevice(devinfo.al_address);
+		let i1905dev = model.addDevice(devinfo.al_mac_address);
 
-		i1905dev.updateTLVs(msg.tlvs);
+		i1905dev.updateTLVs(msg.get_tlvs_raw());
 	}
 	else if (msg.type == defs.MSG_LINK_METRIC_RESPONSE) {
 		let tlvs_by_al_address;
 
-		for (let tlv in msg.tlvs) {
-			if (tlv.type != defs.TLV_LINK_METRIC_RX && tlv.type != defs.TLV_LINK_METRIC_TX)
-				continue;
+		for (let tlv in msg.get_tlvs(defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC, defs.TLV_IEEE1905_RECEIVER_LINK_METRIC)) {
+			let metrics = tlv.data;
 
-			let metrics = tlv.decode();
-
-			if (!metrics) {
+			if (!metrics?.transmitter_al_mac_address) {
 				log.warn(`Ignoring malformed metrics reply CMDU`);
 				return;
 			}
 
-			tlvs_by_al_address ??= {};
-			tlvs_by_al_address[metrics.al_address] ??= [];
-			push(tlvs_by_al_address[metrics.al_address], tlv);
+			push((tlvs_by_al_address ??= {})[metrics.transmitter_al_mac_address] ??= [], tlv);
 		}
 
 		for (let al_address, tlvs in tlvs_by_al_address) {
@@ -195,14 +205,10 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 		let reply = cmdu.create(defs.MSG_HIGHER_LAYER_RESPONSE, msg.mid);
 
-		reply.add_tlv(defs.TLV_AL_MAC_ADDRESS, model.address);
-		reply.add_tlv(defs.TLV_1905_PROFILE_VERSION, 0x01 /* IEEE 1905.1a */);
-		reply.add_tlv(defs.TLV_DEVICE_IDENTIFICATION, null, null, null);
+		reply.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
 
-		// TODO: discover web interface presence
-		reply.add_tlv(defs.TLV_CONTROL_URL, 'http://192.168.1.1');
-
-		push(reply.tlvs, ...model.getLocalDevice().getTLVs(defs.TLV_IPV4, defs.TLV_IPV6));
+		for (let tlv in model.getLocalDevice().getTLVs(defs.TLV_IEEE1905_PROFILE_VERSION, defs.TLV_DEVICE_IDENTIFICATION, defs.TLV_CONTROL_URL, defs.TLV_IPV4, defs.TLV_IPV6))
+			reply.add_tlv_raw(tlv.type, tlv.payload);
 
 		reply.send(i1905lif.i1905txsock, dstmac, al_mac);
 	}
@@ -210,7 +216,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		let i1905dev = model.lookupDevice(al_mac);
 
 		if (i1905dev)
-			i1905dev.updateTLVs(msg.tlvs);
+			i1905dev.updateTLVs(msg.get_tlvs_raw());
 	}
 	else if (msg.type == defs.MSG_COMBINED_INFRASTRUCTURE_METRICS) {
 		let i1905dev = model.lookupDevice(srcmac);
@@ -220,7 +226,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 			return;
 		}
 
-		i1905dev.updateTLVs(msg.tlvs);
+		i1905dev.updateTLVs(msg.get_tlvs_raw());
 	}
 
 	if (msg.flags & defs.CMDU_F_ISRELAY) {
@@ -309,7 +315,7 @@ function emit_topology_discovery() {
 
 		let msg = cmdu.create(defs.MSG_TOPOLOGY_DISCOVERY);
 
-		msg.add_tlv(defs.TLV_AL_MAC_ADDRESS, model.address);
+		msg.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
 		msg.add_tlv(defs.TLV_MAC_ADDRESS, i1905lif.address);
 
 		msg.send(i1905lif.i1905txsock, model.address, defs.IEEE1905_MULTICAST_MAC);
@@ -325,7 +331,7 @@ function emit_topology_notification() {
 
 	let reply = cmdu.create(defs.MSG_TOPOLOGY_NOTIFICATION);
 
-	reply.add_tlv(defs.TLV_AL_MAC_ADDRESS, model.address);
+	reply.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
 
 	for (let i1905lif in model.getLocalInterfaces())
 		reply.send(i1905lif.i1905txsock, model.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
@@ -360,4 +366,3 @@ uloop.timer(1000, emit_topology_notification);
 uloop.timer(5000, cleanup_model);
 
 uloop.run();
-

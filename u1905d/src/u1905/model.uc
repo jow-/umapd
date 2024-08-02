@@ -16,19 +16,179 @@
 
 import { request as wlrequest, 'const' as wlconst } from 'nl80211';
 import { request as rtrequest, 'const' as rtconst } from 'rtnl';
-import { unpack } from 'struct';
-import { readfile } from 'fs';
+import { unpack, buffer } from 'struct';
+import { open, readfile } from 'fs';
 
 import socket from 'u1905.socket';
 import utils from 'u1905.utils';
-import cmdu from 'u1905.cmdu';
-import tlv from 'u1905.tlv';
+//import cmdu from 'u1905.cmdu';
+import * as codec from 'u1905.tlv.codec';
+//import tlv from 'u1905.tlv';
 import log from 'u1905.log';
 import defs from 'u1905.defs';
 
 function timems() {
 	let tv = clock(true) ?? clock(false);
 	return tv[0] * 1000 + tv[1] / 1000000;
+}
+
+function decode_tlv(type, payload) {
+	if (type !== defs.TLV_EXTENDED) {
+		const decode = codec.decoder[type];
+
+		return decode?.(buffer(payload), length(payload));
+	}
+	else {
+		const buf = buffer(payload);
+		const subtype = buf.get('!H');
+		const decode = codec.extended_decoder[subtype];
+
+		return decode?.(buf, length(payload));
+	}
+}
+
+function encode_tlv(type, ...args) {
+	let encode, payload;
+
+	if (type !== defs.TLV_EXTENDED) {
+		encode = codec.encoder[type];
+		payload = encode?.(buffer(), ...args)?.pull?.();
+	}
+	else {
+		const subtype = shift(args);
+
+		encode = codec.extended_encoder[subtype];
+		payload = encode?.(buffer(), ...args)?.pull?.();
+	}
+
+	if (payload === null) {
+		log.debug(`Encoding TLV #${type} with value ${args} failed`);
+		return null;
+	}
+
+	return { type, payload };
+}
+
+function encode_local_interface(i1905lif) {
+	let media_info = "";
+	let info = i1905lif.getRuntimeInformation();
+
+	if (!info)
+		return null;
+
+	if (info.wifi) {
+		let role = 0, chanbw = 0, chan1 = 0, chan2 = 0;
+
+		switch (info.wifi.interface.iftype ?? 0) {
+		case 1: /* Ad-Hoc */
+		case 2: /* Station */
+		case 5: /* WDS */
+		case 6: /* Monitor */
+		case 7: /* Mesh Point */
+		case 10: /* P2P Device */
+		case 11: /* OCB */
+		case 12: /* NAN */
+			role = 0b01000000;
+			break;
+
+		case 3: /* AP */
+		case 4: /* AP VLAN */
+			role = 0b00000000;
+			break;
+
+		case 8: /* P2P Client */
+			role = 0b10000000;
+			break;
+
+		case 9: /* P2P Go */
+			role = 0b10010000;
+			break;
+
+		default: /* unspecified/unknown */
+			role = 0b01000000;
+			break;
+		}
+
+		switch (info.wifi.interface.channel_width ?? 0) {
+		case 0: /* 20MHz NOHT */
+		case 1: /* 20MHz */
+		case 2: /* 40Mhz */
+			chanbw = 0;
+			break;
+
+		case 3: /* 80MHz */
+			chanbw = 1;
+			break;
+
+		case 4: /* 80+80MHz */
+			chanbw = 3;
+			break;
+
+		case 5: /* 160MHz */
+			chanbw = 2;
+			break;
+
+		case 6: /* 5MHz */
+		case 7: /* 10MHz */
+		case 8: /* 1MHz */
+		case 9: /* 2MHz */
+		case 10: /* 4MHz */
+		case 11: /* 8MHz */
+		case 12: /* 16MHz */
+			chanbw = 0;
+			break;
+		}
+
+		for (let band in info.wifi.phy.wiphy_bands) {
+			for (let i, freq in band?.freqs) {
+				if (freq.freq == info.wifi.interface.center_freq1)
+					chan1 = i + 1;
+				else if (freq.freq == info.wifi.interface.center_freq2)
+					chan2 = i + 1;
+			}
+		}
+
+		media_info = pack('!6sBBBB', hexdec(info.wifi.interface.mac, ':'), role, chanbw, chan1, chan2);
+	}
+
+	return {
+		local_if_mac_address: info.address,
+		media_type: info.type ?? 0,  // FIXME
+		media_specific_information: media_info
+	};
+}
+
+function encode_device_identification() {
+	let friendly_name = trim(readfile('/proc/sys/kernel/hostname'));
+	let manufacturer_name, manufacturer_model;
+
+	let osrel = open('/etc/os-release', 'r');
+	if (osrel) {
+		for (let line = osrel.read('line'); length(line); line = osrel.read('line')) {
+			let kv = match(line, '^([^=]+)="(.+)"\n?$');
+
+			switch (kv?.[0]) {
+			case 'OPENWRT_DEVICE_MANUFACTURER':
+				manufacturer_name ??= kv[1];
+				break;
+
+			case 'OPENWRT_DEVICE_PRODUCT':
+				manufacturer_model ??= kv[1];
+				break;
+			}
+		}
+
+		osrel.close();
+	}
+
+	if (manufacturer_model == null || manufacturer_model == 'Generic')
+		manufacturer_model = trim(readfile('/tmp/sysinfo/model'));
+
+	return {
+		friendly_name: friendly_name ?? 'Unknown',
+		manufacturer_name: manufacturer_name ?? 'Unknown',
+		manufacturer_model: manufacturer_model ?? 'Unknown'
+	};
 }
 
 function resolve_bridge_ports(ifname) {
@@ -484,21 +644,21 @@ const I1905Device = proto({
 
 		for (let tlv in tlvs) {
 			switch (tlv?.type) {
-			case defs.TLV_DEVICE_INFORMATION:
+			case defs.TLV_IEEE1905_DEVICE_INFORMATION:
 			case defs.TLV_DEVICE_BRIDGING_CAPABILITY:
-			case defs.TLV_NON1905_NEIGHBOR_DEVICES:
+			case defs.TLV_NON_IEEE1905_NEIGHBOR_DEVICES:
 			case defs.TLV_IEEE1905_NEIGHBOR_DEVICES:
-			case defs.TLV_LINK_METRIC_TX:
-			case defs.TLV_LINK_METRIC_RX:
+			case defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC:
+			case defs.TLV_IEEE1905_RECEIVER_LINK_METRIC:
 			case defs.TLV_L2_NEIGHBOR_DEVICE:
 			case defs.TLV_VENDOR_SPECIFIC:
 			case defs.TLV_CONTROL_URL:
 			case defs.TLV_IPV4:
 			case defs.TLV_IPV6:
-			case defs.TLV_1905_PROFILE_VERSION:
+			case defs.TLV_IEEE1905_PROFILE_VERSION:
 			case defs.TLV_DEVICE_IDENTIFICATION:
-			case defs.TLV_SUPPORTEDSERVICE:
-			case defs.TLV_SEARCHEDSERVICE:
+			case defs.TLV_SUPPORTED_SERVICE:
+			case defs.TLV_SEARCHED_SERVICE:
 			case defs.TLV_AP_RADIO_IDENTIFIER:
 			case defs.TLV_AP_OPERATIONAL_BSS:
 			case defs.TLV_ASSOCIATED_CLIENTS:
@@ -573,7 +733,7 @@ const I1905Device = proto({
 		let d = this.tlvs[defs.TLV_DEVICE_INFORMATION]?.[1];
 		let interfaces = {};
 
-		for (let iface in tlv.decode(defs.TLV_DEVICE_INFORMATION, d)?.ifaces)
+		for (let iface in decode_tlv(defs.TLV_DEVICE_INFORMATION, d)?.ifaces)
 			interfaces[iface.address] ??= iface;
 
 		for (let i1905if in this.interfaces) {
@@ -593,15 +753,15 @@ const I1905Device = proto({
 		if (!d)
 			return null;
 
-		return tlv.decode(defs.TLV_DEVICE_IDENTIFICATION, d);
+		return decode_tlv(defs.TLV_DEVICE_IDENTIFICATION, d);
 	},
 
 	getLinks: function() {
 		let links = {};
 
-		for (let type in [ defs.TLV_LINK_METRIC_RX, defs.TLV_LINK_METRIC_TX ]) {
+		for (let type in [ defs.TLV_IEEE1905_RECEIVER_LINK_METRIC, defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC ]) {
 			for (let i = 1; i < length(this.tlvs[type]); i++) {
-				let d = tlv.decode(type, this.tlvs[type][i]);
+				let d = decode_tlv(type, this.tlvs[type][i]);
 
 				for (let link in d?.links) {
 					links[link.local_address] ??= {};
@@ -621,7 +781,7 @@ const I1905Device = proto({
 					m.media_type ??= link.media_type;
 					m.media_type_name ??= link.media_type_name;
 
-					if (type == defs.TLV_LINK_METRIC_RX) {
+					if (type == defs.TLV_IEEE1905_RECEIVER_LINK_METRIC) {
 						m.rx_errors = link.errors;
 						m.rx_packets = link.packets;
 						m.rssi = link.rssi;
@@ -646,7 +806,7 @@ const I1905Device = proto({
 
 		for (let type in [ defs.TLV_IPV4, defs.TLV_IPV6 ]) {
 			for (let i = 1; i < length(this.tlvs[type]); i++) {
-				for (let d in tlv.decode(type, this.tlvs[type][i])) {
+				for (let d in decode_tlv(type, this.tlvs[type][i])) {
 					let ifc = (interfaces[d.address] ??= {
 						ipaddrs: [],
 						ip6addrs: [],
@@ -699,12 +859,12 @@ const I1905Device = proto({
 					}
 					break;
 
-				//case defs.TLV_LINK_METRIC_TX:
+				//case defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC:
 				//	res.metrics ??= {};
 				//	push(res.metrics.tx ??= [], tlv.decode(+type, tlvs[i]));
 				//	break;
 
-				//case defs.TLV_LINK_METRIC_RX:
+				//case defs.TLV_IEEE1905_RECEIVER_LINK_METRIC:
 				//	res.metrics ??= {};
 				//	push(res.metrics.rx ??= [], tlv.decode(+type, tlvs[i]));
 				//	break;
@@ -723,12 +883,12 @@ const I1905Device = proto({
 				//	push(res.ipv6, ...tlv.decode(+type, tlvs[i]));
 				//	break;
 
-				case defs.TLV_SUPPORTEDSERVICE:
+				case defs.TLV_SUPPORTED_SERVICE:
 					res.map ??= {};
 					res.map.supported_services = tlv.decode(+type, tlvs[i]);
 					break;
 
-				case defs.TLV_SUPPORTEDSERVICE:
+				case defs.TLV_SUPPORTED_SERVICE:
 					res.map ??= {};
 					res.map.searched_services = tlv.decode(+type, tlvs[i]);
 					break;
@@ -786,11 +946,12 @@ const I1905Device = proto({
 		for (let type in types) {
 			for (let i, payload in this.tlvs[type]) {
 				if (i > 0) {
-					push(res, proto({
-						type,
-						length: length(payload),
-						payload
-					}, tlv));
+					//push(res, proto({
+					//	type,
+					//	length: length(payload),
+					//	payload
+					//}, tlv));
+					push(res, { type, payload });
 				}
 			}
 		}
@@ -981,7 +1142,6 @@ export default proto({
 					if (!(station.mac in l2devs))
 						push(l2devs ??= [], station.mac);
 
-					// Skip known IEEE1905 neighbors
 					if (station.mac in i1905macs)
 						continue;
 
@@ -1006,7 +1166,6 @@ export default proto({
 					if (neigh.lladdr in neighs)
 						continue;
 
-					// Skip known IEEE1905 neighbors
 					if (neigh.lladdr in i1905macs)
 						continue;
 
@@ -1016,7 +1175,6 @@ export default proto({
 			}
 
 			for (let i1905rif in i1905if.neighbors) {
-				// Skip non-IEEE1905 neighbors
 				if (!i1905rif.dev.isIEEE1905())
 					continue;
 
@@ -1026,14 +1184,17 @@ export default proto({
 					push(i1905neighs ??= [], i1905rif.dev);
 			}
 
-			if (neighs)
-				push(tlvs, tlv.encode(defs.TLV_IEEE1905_NEIGHBOR_DEVICES, info.address, neighs));
+			if (neighs) {
+				push(tlvs, this.encode_ieee1905_neighbor_devices_tlv(info.address, neighs));
+			}
 
-			if (others)
-				push(tlvs, tlv.encode(defs.TLV_NON1905_NEIGHBOR_DEVICES, info.address, others));
+			if (others) {
+				push(tlvs, this.encode_non1905_neighbor_devices_tlv(info.address, others));
+			}
 
-			if (l2devs)
-				push(tlvs, tlv.encode(defs.TLV_L2_NEIGHBOR_DEVICE, info.address, l2devs, this.getDevices()));
+			if (l2devs) {
+				push(tlvs, this.encode_l2_neighbor_device_tlv(info.address, l2devs));
+			}
 		}
 
 		for (let i1905neigh in i1905neighs) {
@@ -1047,14 +1208,14 @@ export default proto({
 					if (!(i1905rif in i1905lif.neighbors))
 						continue;
 
-					push(links ??= [], i1905lif, i1905rif);
+					push(links ??= [], [ i1905lif, i1905rif ]);
 				}
 			}
 
 			if (links) {
 				push(tlvs,
-					tlv.encode(defs.TLV_LINK_METRIC_TX, this.address, i1905neigh.al_address, links),
-					tlv.encode(defs.TLV_LINK_METRIC_RX, this.address, i1905neigh.al_address, links)
+					this.encode_ieee1905_transmitter_link_metric_tlv(i1905neigh, links),
+					this.encode_ieee1905_receiver_link_metric_tlv(i1905neigh, links)
 				);
 			}
 		}
@@ -1062,13 +1223,13 @@ export default proto({
 		let i1905lifs = values(this.interfaces);
 
 		push(tlvs,
-			tlv.encode(defs.TLV_IPV4, i1905lifs, ifstatus),
-			tlv.encode(defs.TLV_IPV6, i1905lifs, ifstatus),
-			tlv.encode(defs.TLV_DEVICE_INFORMATION, i1905lifs, this.address),
-			tlv.encode(defs.TLV_DEVICE_IDENTIFICATION, null, null, null),
-			tlv.encode(defs.TLV_DEVICE_BRIDGING_CAPABILITY, values(bridges)),
-			tlv.encode(defs.TLV_CONTROL_URL, 'http://192.168.1.1' /* FIXME */),
-			tlv.encode(defs.TLV_1905_PROFILE_VERSION, 0x01)
+			this.encode_ipv4_tlv(i1905lifs, ifstatus),
+			this.encode_ipv6_tlv(i1905lifs, ifstatus),
+			this.encode_ieee1905_device_information_tlv(i1905lifs),
+			this.encode_device_identification_tlv(),
+			this.encode_device_bridging_capability_tlv(bridges),
+			this.encode_control_url_tlv(),
+			this.encode_ieee1905_profile_version_tlv()
 		);
 
 		for (let i1905rif in i1905dev.interfaces) {
@@ -1077,6 +1238,172 @@ export default proto({
 		}
 
 		i1905dev.updateTLVs(tlvs);
+	},
+
+	encode_ieee1905_neighbor_devices_tlv: function(address, neighs) {
+		return encode_tlv(defs.TLV_IEEE1905_NEIGHBOR_DEVICES, {
+			local_if_mac_address: address,
+			ieee1905_neighbors: map(neighs, neigh => ({
+				neighbor_al_mac_address: neigh.address,
+				bridges_present: neigh.isBridged()
+			}))
+		});
+	},
+
+	encode_non1905_neighbor_devices_tlv: function(address, others) {
+		return encode_tlv(defs.TLV_NON1905_NEIGHBOR_DEVICES, {
+			local_if_mac_address: address,
+			non_ieee1905_neighbors: others
+		});
+	},
+
+	encode_l2_neighbor_device_tlv: function(address, l2devs) {
+		return encode_tlv(defs.TLV_L2_NEIGHBOR_DEVICE, [
+			{
+				if_mac_address: address,
+				neighbors: map(l2devs, mac => {
+					let neighbor_device = {
+						neighbor_mac_address: mac,
+						behind_mac_addresses: []
+					};
+
+					for (let i1905dev in this.getDevices()) {
+						let i1905rif = i1905dev.lookupInterface(mac);
+
+						if (!i1905rif)
+							continue;
+
+						let l2 = i1905dev.getTLVs(defs.TLV_L2_NEIGHBOR_DEVICE);
+						let data;
+
+						if (length(l2)) {
+							for (let tlv in l2) {
+								if ((data = decode_tlv(tlv.type, tlv.payload)) != null) {
+									for (let dev in data) {
+										if (dev.if_mac_address == mac)
+											continue;
+
+										push(neighbor_device.behind_mac_addresses,
+											...map(dev.neighbors, ndev => ndev.neighbor_mac_address));
+									}
+								}
+							}
+						}
+						else {
+							let others = i1905dev.getTLVs(defs.TLV_NON_IEEE1905_NEIGHBOR_DEVICES);
+							let metrics = i1905dev.getTLVs(defs.TLV_IEEE1905_RECEIVER_LINK_METRIC);
+
+							for (let tlv in others) {
+								if ((data = decode_tlv(tlv.type, tlv.payload)) != null && data.local_if_mac_address != mac)
+									push(neighbor_device.behind_mac_addresses, ...data.non_ieee1905_neighbors);
+							}
+
+							for (let tlv in metrics) {
+								if ((data = decode_tlv(tlv.type, tlv.payload)) != null) {
+									for (let link in decode_tlv(tlv.type, tlv.payload).link_metrics) {
+										if (link.local_if_mac_address != mac)
+											push(neighbor_device.behind_mac_addresses, link.remote_if_mac_address);
+									}
+								}
+							}
+						}
+					}
+
+					return neighbor_device;
+				})
+			}
+		]);
+	},
+
+	encode_ieee1905_transmitter_link_metric_tlv: function(i1905neigh, links) {
+		return encode_tlv(defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC, {
+			transmitter_al_mac_address: this.address,
+			neighbor_al_mac_address: i1905neigh.al_address,
+			link_metrics: map(links, tuple => {
+				const metrics = tuple[0].getLinkMetrics(tuple[1].address);
+				return {
+					local_if_mac_address: tuple[0].address,
+					remote_if_mac_address: tuple[1].address,
+					media_type: tuple[0].getMediaType(),
+					bridges_present: tuple[1].isBridged(),
+					packet_errors: metrics.tx_errors,
+					transmitted_packets: metrics.tx_packets,
+					mac_throughput_capacity: metrics.throughput,
+					link_availability: metrics.availability,
+					phy_rate: metrics.phyrate
+				};
+			})
+		});
+	},
+
+	encode_ieee1905_receiver_link_metric_tlv: function(i1905neigh, links) {
+		return encode_tlv(defs.TLV_IEEE1905_RECEIVER_LINK_METRIC, {
+			transmitter_al_mac_address: this.address,
+			neighbor_al_mac_address: i1905neigh.al_address,
+			link_metrics: map(links, tuple => {
+				const metrics = tuple[0].getLinkMetrics(tuple[1].address);
+				return {
+					local_if_mac_address: tuple[0].address,
+					remote_if_mac_address: tuple[1].address,
+					media_type: tuple[0].getMediaType(),
+					packet_errors: metrics.rx_errors,
+					received_packets: metrics.rx_packets,
+					rssi: metrics.rssi
+				};
+			})
+		});
+	},
+
+	encode_ipv4_tlv: function(i1905lifs, ifstatus) {
+		return encode_tlv(defs.TLV_IPV4, filter(
+			map(i1905lifs, i1905lif => ({
+				if_mac_address: i1905lif.address,
+				addresses: map(i1905lif.getIPAddrs(ifstatus), ipaddr => ({
+					ipv4addr_type: ipaddr[2],
+					address: ipaddr[0],
+					dhcp_server: ipaddr[3]
+				}))
+			})),
+			interface => length(interface.addresses)
+		));
+	},
+
+	encode_ipv6_tlv: function(i1905lifs, ifstatus) {
+		return encode_tlv(defs.TLV_IPV6, filter(
+			map(i1905lifs, i1905lif => ({
+				if_mac_address: i1905lif.address,
+				linklocal_address: i1905lif.getIP6Addrs(ifstatus)[0][0],
+				other_addresses: map(i1905lif.getIP6Addrs(ifstatus), ip6addr => ({
+					ipv6addr_type: ip6addr[2],
+					address: ip6addr[0],
+					origin: ip6addr[3]
+				}))
+			})),
+			interface => length(interface.addresses)
+		));
+	},
+
+	encode_ieee1905_device_information_tlv: function(i1905lifs) {
+		return encode_tlv(defs.TLV_IEEE1905_DEVICE_INFORMATION, {
+			al_mac_address: this.address,
+			local_interfaces: map(i1905lifs, i1905lif => encode_local_interface(i1905lif))
+		});
+	},
+
+	encode_device_identification_tlv: function() {
+		return encode_tlv(defs.TLV_DEVICE_IDENTIFICATION, encode_device_identification());
+	},
+
+	encode_device_bridging_capability_tlv: function(bridges) {
+		return encode_tlv(defs.TLV_DEVICE_BRIDGING_CAPABILITY, values(bridges));
+	},
+
+	encode_control_url_tlv: function() {
+		return encode_tlv(defs.TLV_CONTROL_URL, 'http://192.168.1.1' /* FIXME */);
+	},
+
+	encode_ieee1905_profile_version_tlv: function() {
+		return encode_tlv(defs.TLV_IEEE1905_PROFILE_VERSION, 0x01);
 	},
 
 	collectGarbage: function(now) {

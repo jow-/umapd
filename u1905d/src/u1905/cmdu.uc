@@ -14,17 +14,21 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-import { pack, unpack } from 'struct';
+import { pack, unpack, buffer } from 'struct';
 
-import i1905tlv from 'u1905.tlv';
 import utils from 'u1905.utils';
 import log from 'u1905.log';
 import defs from 'u1905.defs';
 
+import * as codec from 'u1905.tlv.codec';
+
 const ETHERNET_HEADER_LENGTH = 14;
 const IEEE1905_HEADER_LENGTH = 8;
-const CMDU_MAX_PAYLOAD_LENGTH = 1500 - ETHERNET_HEADER_LENGTH - IEEE1905_HEADER_LENGTH - 3 /* EOF TLV */;
-const TLV_MAX_PAYLOAD_LENGTH = CMDU_MAX_PAYLOAD_LENGTH - 3 /* TLV type + TLV length */;
+const TLV_HEADER_LENGTH = 3;
+const TLV_EXTENDED_HEADER_LENGTH = 5;
+const IEEE1905_MAX_PAYLOAD_LENGTH = 1500 - ETHERNET_HEADER_LENGTH - IEEE1905_HEADER_LENGTH;
+const CMDU_MAX_PAYLOAD_LENGTH = IEEE1905_MAX_PAYLOAD_LENGTH - TLV_HEADER_LENGTH /* EOF TLV */;
+const TLV_MAX_PAYLOAD_LENGTH = CMDU_MAX_PAYLOAD_LENGTH - TLV_HEADER_LENGTH /* TLV type + TLV length */;
 
 const CMDU_MESSAGE_VERSION = 0;
 
@@ -36,34 +40,79 @@ const CMDU_MAX_PAYLOAD_SIZE = 102400;
 
 let reassembly = utils.Queue(CMDU_MAX_CONCURRENT_REASSEMBLY);
 
-function send_fragment(socket, src, dest, type, mid, fid, payload_fmt, payload_data, flags) {
-	return socket.send(src, dest, pack(`!BxHHBB${join('', payload_fmt)}`,
-		CMDU_MESSAGE_VERSION,
-		type,
-		mid,
-		fid,
-		flags,
-		...payload_data
-	));
+function alloc_fragment(type, mid, fid, flags) {
+	return buffer().put('!BxHHBB', CMDU_MESSAGE_VERSION, type, mid, fid, flags);
 }
 
-function parse_fragment(tlvs) {
-	let payload = [];
-	let offset = 0;
+function decode_tlv(msg, type, start, end) {
+	if (type !== defs.TLV_EXTENDED) {
+		const decode = codec.decoder[type];
 
-	while (true) {
-		let tlv = i1905tlv.parse(tlvs, offset);
+		if (decode == null) {
+			log.warn(`CMDU ${msg.srcmac}#${msg.mid}: Unrecognized TLV type ${type} at offset ${start}`);
+			return null;
+		}
 
-		if (!tlv)
-			break;
+		const data = decode(msg.buf.pos(start), end);
 
-		push(payload, tlv);
+		if (data == null) {
+			log.warn(`CMDU ${msg.srcmac}#${msg.mid}: Invalid payload in TLV type ${type} at offset ${start}`);
+			return null;
+		}
 
-		offset += tlv.length + 3;
+		return { type, data };
+	}
+	else {
+		const subtype = msg.buf.pos(start).get('!H');
+		const decode = codec.extended_decoder[subtype];
+
+		if (decode == null) {
+			log.warn(`CMDU ${msg.srcmac}#${msg.mid}: Unrecognized extended TLV type ${type}, subtype ${subtype} at offset ${start}`);
+			return null;
+		}
+
+		const data = decode(msg.buf, end);
+
+		if (data == null) {
+			log.warn(`CMDU ${msg.srcmac}#${msg.mid}: Invalid payload in extended TLV type ${type}, subtype ${subtype} at offset ${start}`);
+			return null;
+		}
+
+		return { type, subtype, data };
+	}
+}
+
+function parse_tlvs(buf) {
+	const end = buf.length();
+	const tlvs = [];
+
+	for (let off = buf.pos(); off + TLV_HEADER_LENGTH <= end; buf.pos(off = tlvs[-1])) {
+		const tlv_type = buf.get('B');
+		const tlv_len = buf.get('!H');
+
+		if (off + TLV_HEADER_LENGTH + tlv_len > end) {
+			log.warn(`Unexpected EOF while parsing CMDU TLV ${tlv_type} - want ${tlv_len} bytes, have ${end - off + TLV_HEADER_LENGTH}`);
+			return null;
+		}
+
+		push(tlvs, tlv_type, off + TLV_HEADER_LENGTH, off + TLV_HEADER_LENGTH + tlv_len);
 	}
 
-	return payload;
+	return tlvs;
 }
+
+function cmdu_name(type) {
+	for (let k, v in defs)
+		if (v === type && index(k, 'MSG_') === 0)
+			return substr(k, 4);
+}
+
+function tlv_name(type) {
+	for (let k, v in defs)
+		if (v === type && index(k, 'TLV_') === 0)
+			return substr(k, 4);
+}
+
 
 export default {
 	mid_counter: 0,
@@ -72,24 +121,26 @@ export default {
 		return proto({
 			type,
 			mid: mid ?? (++this.mid_counter % 65536),
+			buf: buffer(),
 			tlvs: []
 		}, this);
 	},
 
 	parse: function(srcmac, payload) {
 		// ensure minimum length
-		if (length(payload) < IEEE1905_HEADER_LENGTH + 3) {
+		if (length(payload) < IEEE1905_HEADER_LENGTH + TLV_HEADER_LENGTH) {
 			log.debug('CMDU packet too short');
 			return null;
 		}
 
-		let pktdata = unpack('!BxHHBB*', payload),
-		    version = pktdata[0],
-		    type = pktdata[1],
-		    mid = pktdata[2],
-		    fid = pktdata[3],
-		    flags = pktdata[4],
-		    tlvs = pktdata[5];
+		const buf = buffer(payload);
+		const header = buf.read('!BxHHBB');
+
+		const version = header[0];
+		const type = header[1];
+		const mid = header[2];
+		const fid = header[3];
+		const flags = header[4];
 
 		// verify version
 		if (version != CMDU_MESSAGE_VERSION) {
@@ -99,18 +150,25 @@ export default {
 
 		// shortcut: non-fragmented packet
 		if (fid == 0 && (flags & CMDU_F_LASTFRAG)) {
-			let payload = parse_fragment(tlvs);
+			let tlvs = parse_tlvs(buf.pos(IEEE1905_HEADER_LENGTH));
 
-			// require EOM TLV
-			if (payload?.[-1]?.type != 0)
+			if (tlvs == null) {
+				log.warn(`CMDU ${srcmac}#${mid}: Invalid message payload`);
 				return null;
+			}
+
+			if (tlvs[-3] !== defs.TLV_END_OF_MESSAGE) {
+				log.warn(`CMDU ${srcmac}#${mid}: Missing End-Of-Message TLV`);
+				return null;
+			}
 
 			return proto({
 				srcmac,
 				flags,
 				type,
 				mid,
-				tlvs: payload
+				buf,
+				tlvs
 			}, this);
 		}
 
@@ -133,41 +191,54 @@ export default {
 
 		// reject duplicate fragment
 		else if (msg.fragments[fid]) {
+			log.warn(`CMDU ${srcmac}#${mid}: Duplicate fragment #${fid} received`);
 			return null;
 		}
 
 		// already seen last fragment, ensure that fid is below
-		if ((msg.flags & CMDU_F_LASTFRAG) && fid >= length(msg.fragments))
+		if ((msg.flags & CMDU_F_LASTFRAG) && fid >= length(msg.fragments)) {
+			log.warn(`CMDU ${srcmac}#${mid}: Bogus trailing fragment #${fid} received`);
 			return null;
-
-		// parse fragment TLVs
-		let frag = parse_fragment(tlvs);
-
-		// malformed
-		if (!frag)
-			return null;
-
-		// require EOM TLV in last fragment
-		if ((flags & CMDU_F_LASTFRAG) && frag?.[-1]?.type != 0)
-			return null;
+		}
 
 		msg.flags |= flags;
-		msg.fragments[fid] = frag;
+		msg.fragments[fid] = buf;
 
-		// check for missing fragments
+		// reassemble fragments
 		if (msg.flags & CMDU_F_LASTFRAG) {
-			let payload = [];
-
-			for (fid = 0; fid < length(msg.fragments); fid++)
-				if (msg.fragments[fid])
-					push(payload, ...msg.fragments[fid]);
-				else
+			// return on yet missing fragments (fragments were received out of order)
+			for (let i = 0; i < length(msg.fragments); i++) {
+				if (msg.fragments[fid] == null) {
+					log.debug(`CMDU ${srcmac}#${mid}: Fragments received out of order, fragment ${i+1} of ${length(msg.fragments)} missing`);
 					return msg;
+				}
+			}
+
+			// all fragments present, reassemble message
+			msg.buf = shift(msg.fragments);
+
+			while (msg.fragments[0] != null)
+				msg.buf.end().put('*', shift(msg.fragments).slice(IEEE1905_HEADER_LENGTH));
+
+			msg.buf.pos(IEEE1905_HEADER_LENGTH);
+
+			let tlvs = parse_tlvs(msg.buf);
+
+			if (tlvs == null) {
+				log.warn(`CMDU ${srcmac}#${mid}: Invalid message payload`);
+				return null;
+			}
+
+			if (tlvs[-3] !== defs.TLV_END_OF_MESSAGE) {
+				log.warn(`CMDU ${srcmac}#${mid}: Missing End-Of-Message TLV`);
+				return null;
+			}
+
+			msg.tlvs = tlvs;
+
+			reassembly.remove(msg);
 
 			delete msg.fragments;
-
-			msg.tlvs = payload;
-			reassembly.remove(msg);
 		}
 
 		return msg;
@@ -177,34 +248,136 @@ export default {
 		return !this.fragments;
 	},
 
-	add_tlv: function(...args) {
-		let tlv = i1905tlv.encode(...args);
+	ensure_eom: function() {
+		if (this.tlvs[-3] !== defs.TLV_END_OF_MESSAGE) {
+			const offset = this.tlvs[-1] ?? IEEE1905_HEADER_LENGTH;
 
-		if (tlv)
-			push(this.tlvs, tlv);
+			this.buf.pos(offset).put('!BH', defs.TLV_END_OF_MESSAGE, 0);
+			push(this.tlvs, defs.TLV_END_OF_MESSAGE, offset, offset + TLV_HEADER_LENGTH);
+		}
+	},
+
+	add_tlv: function(type, ...args) {
+		let append_eom = false;
+		let success = true;
+		let offset;
+
+		if (this.tlvs[-3] === defs.TLV_END_OF_MESSAGE) {
+			append_eom = true;
+			offset = this.tlvs[-2];
+			splice(this.tlvs, -3);
+		}
+		else {
+			offset = this.tlvs[-1] ?? IEEE1905_HEADER_LENGTH;
+		}
+
+		if (type !== defs.TLV_EXTENDED) {
+			const encode = codec.encoder[type];
+
+			if (encode != null && encode(this.buf.pos(offset + TLV_HEADER_LENGTH), ...args)) {
+				// encoding successfull, write TLV header
+				const tlv_len = this.buf.pos() - offset - TLV_HEADER_LENGTH;
+				this.buf.pos(offset).put('!BH', type, tlv_len);
+				push(this.tlvs, type, offset, offset + TLV_HEADER_LENGTH + tlv_len);
+			}
+			else {
+				// encoding failure, reset buffer length
+				this.buf.length(offset);
+				success = false;
+			}
+		}
+		else {
+			const subtype = shift(args);
+			const encode = codec.extended_encoder[subtype];
+
+			if (encode != null && encode(this.buf.pos(offset + TLV_EXTENDED_HEADER_LENGTH), ...args)) {
+				// encoding successfull, write extended TLV header
+				const tlv_len = this.buf.pos() - offset - TLV_HEADER_LENGTH;
+				this.buf.pos(offset).put('!BHH', defs.TLV_EXTENDED, tlv_len, subtype);
+				push(this.tlvs, defs.TLV_EXTENDED, offset, offset + TLV_HEADER_LENGTH + tlv_len);
+			}
+			else {
+				// encoding failure, reset buffer length
+				this.buf.length(offset);
+				success = false;
+			}
+		}
+
+		if (append_eom)
+			this.ensure_eom();
+
+		return success;
+	},
+
+	add_tlv_raw: function(type, payload) {
+		let append_eom = false;
+		let offset;
+
+		if (this.tlvs[-3] === defs.TLV_END_OF_MESSAGE) {
+			append_eom = true;
+			offset = this.tlvs[-2];
+			splice(this.tlvs, -3);
+		}
+		else {
+			offset = this.tlvs[-1] ?? IEEE1905_HEADER_LENGTH;
+		}
+
+		this.buf.pos(offset).put('!BH*', type, length(payload), payload);
+		push(this.tlvs, type, offset, offset + TLV_HEADER_LENGTH + length(payload));
+
+		if (append_eom)
+			this.ensure_eom();
 	},
 
 	get_tlv: function(type) {
-		for (let tlv in this.tlvs)
-			if (tlv.type == type)
-				return tlv;
+		for (let i = 0; this.tlvs[i] !== null; i += 3)
+			if (this.tlvs[i] === type)
+				return decode_tlv(this, this.tlvs[i], this.tlvs[i+1], this.tlvs[i+2])?.data;
 	},
 
-	decode: function(type) {
-		let res;
+	get_tlv_raw: function(type) {
+		for (let i = 0; this.tlvs[i] !== null; i += 3)
+			if (this.tlvs[i] === type)
+				return this.buf.slice(this.tlvs[i+1], this.tlvs[i+2]);
+	},
 
-		if (type) {
-			for (let tlv in this.tlvs)
-				if (tlv.type === type)
-					return tlv.decode();
+	get_tlvs: function(...types) {
+		const rv = [];
 
-			return null;
+		for (let i = 0; this.tlvs[i] !== null; i += 3) {
+			if (!length(types) || this.tlvs[i] in types) {
+				const tlv = decode_tlv(this, this.tlvs[i], this.tlvs[i+1], this.tlvs[i+2]);
+				if (tlv != null)
+					push(rv, tlv);
+			}
 		}
 
-		for (let tlv in this.tlvs)
-			push(res ??= [], [ tlv.type, tlv.decode() ]);
+		return rv;
+	},
 
-		return res;
+	get_tlvs_raw: function(...types) {
+		const rv = [];
+
+		for (let i = 0; this.tlvs[i] !== null; i += 3) {
+			if (!length(types) || this.tlvs[i] in types) {
+				push(rv, {
+					type: this.tlvs[i],
+					payload: this.buf.slice(this.tlvs[i+1], this.tlvs[i+2])
+				});
+			}
+		}
+
+		return rv;
+	},
+
+	has_tlv: function(...types) {
+		let count = 0;
+
+		for (let i = 0; this.tlvs[i] !== null; i += 3)
+			if (this.tlvs[i] in types)
+				count++;
+
+		return count;
 	},
 
 	send: function(socket, src, dest, flags) {
@@ -213,42 +386,74 @@ export default {
 		let size = 0;
 		let fid = 0;
 
-		log.debug('TX %-8s: %s > %s : %s (%04x) [%d]',
+		log.debug('TX %-8s: %s > %s : %04x (%s) [%d]',
 			socket.ifname,
 			src, dest,
-			defs.getCMDUTypeName(this.type) ?? 'Unknown Type', this.type,
+			this.type,
+			cmdu_name(this.type) ?? 'Unknown Type',
 			this.mid);
 
-		for (let tlv in this.tlvs)
-			if (tlv.type != 0)
+		this.ensure_eom();
+
+		for (let i = 0; this.tlvs[i] !== null; i += 3) {
+			if (this.tlvs[i] != 0) {
 				log.debug('  TLV %02x (%s) - %d byte',
-					tlv.type,
-					defs.getTLVTypeName(tlv.type),
-					tlv.length);
-
-		if (this.tlvs[-1]?.type != 0)
-			this.add_tlv(0);
-
-		for (let tlv in this.tlvs) {
-			let tlv_data = pack('!BH*', tlv.type, tlv.length, tlv.payload);
-			let tlv_length = length(tlv_data);
-
-			assert(tlv_length <= CMDU_MAX_PAYLOAD_LENGTH, 'TLV too large');
-
-			if (size + tlv_length > CMDU_MAX_PAYLOAD_LENGTH) {
-				send_fragment(socket, src, dest, this.type, this.mid, fid++, payload_fmt, payload_data, (flags ?? 0));
-
-				size = tlv_length;
-				payload_fmt = [ '*' ];
-				payload_data = [ tlv_data ];
-				continue;
+					this.tlvs[i],
+					tlv_name(this.tlvs[i]) ?? 'Unknown TLV',
+					this.tlvs[i+2] - this.tlvs[i+1]);
 			}
-
-			size += tlv_length;
-			push(payload_fmt, '*');
-			push(payload_data, tlv_data);
 		}
 
-		send_fragment(socket, src, dest, this.type, this.mid, fid, payload_fmt, payload_data, (flags ?? 0) | CMDU_F_LASTFRAG);
+		let cmdu_size = this.tlvs[-1] ?? IEEE1905_HEADER_LENGTH;
+
+		if (cmdu_size <= 1500 - ETHERNET_HEADER_LENGTH) {
+			this.buf.start().put('!BxHHBB', CMDU_MESSAGE_VERSION, this.type, this.mid, 0, (flags ?? 0) | CMDU_F_LASTFRAG);
+
+			socket.send(src, dest, this.buf.slice());
+		}
+		else if (true) {
+			log.debug('  ! Requires fragmentation at TLV boundary');
+
+			let payload_len = 0;
+
+			for (let i = 0; this.tlvs[i] !== null; i += 3) {
+				let tlv_len = this.tlvs[i+2] - this.tlvs[i+1];
+
+				if (payload_len + tlv_len > IEEE1905_MAX_PAYLOAD_LENGTH) {
+					let fragment = alloc_fragment(this.type, this.mid, fid++, flags ?? 0);
+
+					fragment.put('*', this.buf.slice(this.tlvs[i+1] - payload_len, this.tlvs[i+1]));
+					socket.send(src, dest, fragment.pull());
+
+					payload_len = 0;
+				}
+
+				payload_len += tlv_len;
+			}
+
+			let fragment = alloc_fragment(this.type, this.mid, fid++, (flags ?? 0) | CMDU_F_LASTFRAG);
+
+			fragment.put('*', this.buf.slice(-payload_len));
+			socket.send(src, dest, fragment.pull());
+		}
+		else {
+			log.debug('  ! Requires fragmentation at octet boundary');
+
+			let offset = IEEE1905_HEADER_LENGTH;
+
+			while (cmdu_size - offset > IEEE1905_MAX_PAYLOAD_LENGTH) {
+				let fragment = alloc_fragment(this.type, this.mid, fid++, flags ?? 0);
+
+				fragment.put('*', this.buf.slice(offset, offset + IEEE1905_MAX_PAYLOAD_LENGTH));
+				socket.send(src, dest, fragment.pull());
+
+				offset += IEEE1905_MAX_PAYLOAD_LENGTH;
+			}
+
+			let fragment = alloc_fragment(this.type, this.mid, fid++, (flags ?? 0) | CMDU_F_LASTFRAG);
+
+			fragment.put('*', this.buf.slice(offset));
+			socket.send(src, dest, fragment.pull());
+		}
 	}
 };
