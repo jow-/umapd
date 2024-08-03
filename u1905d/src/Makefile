@@ -4,7 +4,13 @@ FPIC ?= -fpic
 
 TLV_SOURCES:=$(wildcard u1905/tlv/[0-9a-f][0-9a-f].uc)
 
-build: u1905/socket/raw.so u1905/tlv/registry.uc
+build: u1905/core.so u1905/crypto.so u1905/socket/raw.so u1905/tlv/registry.uc
+
+u1905/core.so: u1905/core.c
+	$(CC) -shared -o $@ $(CFLAGS) $(FPIC) $^
+
+u1905/crypto.so: u1905/crypto.c
+	$(CC) -shared -o $@ $(CFLAGS) $(FPIC) $^ -lcrypto
 
 u1905/socket/raw.so: u1905/socket/raw.c
 	$(CC) -shared -o $@ $(CFLAGS) $(FPIC) $^
