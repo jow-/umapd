@@ -16,12 +16,12 @@
 
 import * as uloop from 'uloop';
 
-import model from 'u1905.model';
-import cmdu from 'u1905.cmdu';
-import defs from 'u1905.defs';
-import log from 'u1905.log';
+import model from 'umap.model';
+import cmdu from 'umap.cmdu';
+import defs from 'umap.defs';
+import log from 'umap.log';
 
-import * as wsc from 'u1905.wsc';
+import * as wsc from 'umap.wsc';
 import wireless from 'umap.wireless';
 
 

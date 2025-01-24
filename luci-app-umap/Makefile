@@ -1,13 +1,13 @@
 #
-# Copyright (C) 2023 Jo-Philipp Wich <jo@mein.io>
+# Copyright (C) 2023-2025 Jo-Philipp Wich <jo@mein.io>
 #
 # This is free software, licensed under the Apache License, Version 2.0 .
 #
 
 include $(TOPDIR)/rules.mk
 
-LUCI_TITLE:=u1905d - Mesh topology information
-LUCI_DEPENDS:=+luci-base +u1905d
+LUCI_TITLE:=umap - EasyMesh topology information
+LUCI_DEPENDS:=+luci-base +umapd
 
 include $(TOPDIR)/feeds/luci/luci.mk
 

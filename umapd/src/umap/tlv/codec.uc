@@ -1,4 +1,4 @@
-import defs from 'u1905.defs';
+import defs from 'umap.defs';
 
 // -----------------------------------------------------------------------------
 // TLV ENCODER ROUTINES
@@ -7705,4 +7705,3 @@ extended_decoder[0x0007] = (buf, end) => {
 
 	return radios;
 };
-

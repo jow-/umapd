@@ -19,13 +19,13 @@ import { request as rtrequest, 'const' as rtconst } from 'rtnl';
 import { pack, unpack, buffer } from 'struct';
 import { open, readfile } from 'fs';
 
-import socket from 'u1905.socket';
-import utils from 'u1905.utils';
-//import cmdu from 'u1905.cmdu';
-import * as codec from 'u1905.tlv.codec';
-//import tlv from 'u1905.tlv';
-import log from 'u1905.log';
-import defs from 'u1905.defs';
+import socket from 'umap.socket';
+import utils from 'umap.utils';
+//import cmdu from 'umap.cmdu';
+import * as codec from 'umap.tlv.codec';
+//import tlv from 'umap.tlv';
+import log from 'umap.log';
+import defs from 'umap.defs';
 
 import wireless from 'umap.wireless';
 

@@ -16,11 +16,11 @@
 
 import { pack, unpack, buffer } from 'struct';
 
-import utils from 'u1905.utils';
-import log from 'u1905.log';
-import defs from 'u1905.defs';
+import utils from 'umap.utils';
+import log from 'umap.log';
+import defs from 'umap.defs';
 
-import * as codec from 'u1905.tlv.codec';
+import * as codec from 'umap.tlv.codec';
 
 const ETHERNET_HEADER_LENGTH = 14;
 const IEEE1905_HEADER_LENGTH = 8;

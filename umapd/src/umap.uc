@@ -19,15 +19,15 @@
 
 import * as uloop from 'uloop';
 
-import * as sys from 'u1905.core';
-import socket from 'u1905.socket';
-import cmdu from 'u1905.cmdu';
-import lldp from 'u1905.lldp';
-import utils from 'u1905.utils';
-import model from 'u1905.model';
-import defs from 'u1905.defs';
-import ubus from 'u1905.ubus';
-import log from 'u1905.log';
+import * as sys from 'umap.core';
+import socket from 'umap.socket';
+import cmdu from 'umap.cmdu';
+import lldp from 'umap.lldp';
+import utils from 'umap.utils';
+import model from 'umap.model';
+import defs from 'umap.defs';
+import ubus from 'umap.ubus';
+import log from 'umap.log';
 
 import autoconf from 'umap.proto.autoconf';
 

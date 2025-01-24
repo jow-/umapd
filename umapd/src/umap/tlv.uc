@@ -17,11 +17,11 @@
 import { readfile, open } from 'fs';
 import { pack, unpack } from 'struct';
 
-import { encoder, decoder, extended_encoder, extended_decoder } from 'u1905.tlv.codec';
+import { encoder, decoder, extended_encoder, extended_decoder } from 'umap.tlv.codec';
 
-import utils from 'u1905.utils';
-import defs from 'u1905.defs';
-import log from 'u1905.log';
+import utils from 'umap.utils';
+import defs from 'umap.defs';
+import log from 'umap.log';
 
 
 function encode_local_interface(i1905lif) {

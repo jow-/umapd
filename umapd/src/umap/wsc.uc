@@ -1,11 +1,11 @@
 import { pack, unpack, buffer } from 'struct';
 import { readfile } from 'fs';
 import log from 'log';
-import { sha256, hmac_sha256, aes_encrypt, aes_decrypt, dh_keypair, dh_sharedkey } from 'u1905.crypto';
+import { sha256, hmac_sha256, aes_encrypt, aes_decrypt, dh_keypair, dh_sharedkey } from 'umap.crypto';
 import wireless from 'umap.wireless';
 
-import model from 'u1905.model';
-import utils from 'u1905.utils';
+import model from 'umap.model';
+import utils from 'umap.utils';
 
 // Constants
 const ATTR_VERSION = 0x104a;
@@ -410,7 +410,7 @@ export function wscProcessM2(key, m1, m2)
 
 	// Verify authenticator
 	let computed_authenticator = substr(hmac_sha256(authkey, m1 + substr(m2, 0, -12)), 0, 8);
-	if (computed_authenticator !== m2_authenticator) 
+	if (computed_authenticator !== m2_authenticator)
 		return log.warn('WSC M2 message authentication failed');
 
 	// Decrypt and process encrypted settings

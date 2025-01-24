@@ -1,12 +1,12 @@
 #
-# Copyright (C) 2023 Jo-Philipp Wich <jo@mein.io>
+# Copyright (C) 2023-2025 Jo-Philipp Wich <jo@mein.io>
 #
 # This is free software, licensed under the Apache 2 license.
 #
 
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=u1905d
+PKG_NAME:=umapd
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 
@@ -15,22 +15,22 @@ PKG_BUILD_DEPENDS:=ucode
 include $(INCLUDE_DIR)/package.mk
 
 
-define Package/u1905d
+define Package/umapd
   SECTION:=net
   CATEGORY:=Network
-  TITLE:=IEEE 1905.1 daemon
+  TITLE:=Wireless EasyMesh daemon
   MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
   DEPENDS:=libopenssl
 endef
 
-define Package/u1905d/description
-  The u190d daemon is an implementation of the IEEE 1905.1 standard.
+define Package/umapd/description
+  The umapd daemon is an implementation of the Wi-Fi EasyMesh standard.
 endef
 
-LIBS:=u1905/*.so u1905/socket/raw.so
-MODS:=u1905/*.uc u1905/tlv/*.uc umap/*.uc
+LIBS:=umap/*.so umap/socket/raw.so
+MODS:=umap/*.uc umap/tlv/*.uc umap/*.uc
 
-define Package/u1905d/install
+define Package/umapd/install
 	$(foreach dir,$(dir $(LIBS)),$(INSTALL_DIR) $(1)/usr/lib/ucode/$(dir); )
 	$(foreach file,$(LIBS), \
 		$(INSTALL_BIN) \
@@ -44,9 +44,9 @@ define Package/u1905d/install
 			$(1)/usr/share/ucode/$(dir $(file)); )
 
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/init.d $(1)/etc/config
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/u1905.uc $(1)/usr/sbin/u1905d
-	$(INSTALL_BIN) ./files/u1905d.init $(1)/etc/init.d/u1905d
-	$(INSTALL_CONF) ./files/u1905d.config $(1)/etc/config/u1905d
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/umap.uc $(1)/usr/sbin/umapd
+	$(INSTALL_BIN) ./files/umapd.init $(1)/etc/init.d/umapd
+	$(INSTALL_CONF) ./files/umapd.config $(1)/etc/config/umapd
 endef
 
-$(eval $(call BuildPackage,u1905d))
+$(eval $(call BuildPackage,umapd))

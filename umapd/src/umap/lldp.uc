@@ -16,8 +16,8 @@
 
 import { pack, unpack } from 'struct';
 
-import utils from 'u1905.utils';
-import defs from 'u1905.defs';
+import utils from 'umap.utils';
+import defs from 'umap.defs';
 
 export default {
 	create: function(chassis, port, ttl) {

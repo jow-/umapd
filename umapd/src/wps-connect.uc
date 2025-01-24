@@ -3,7 +3,7 @@
 'use strict';
 
 import * as fs from 'fs';
-import * as sys from 'u1905.core';
+import * as sys from 'umap.core';
 import * as wlnl from 'nl80211';
 import * as socket from 'socket';
 import * as libuci from 'uci';

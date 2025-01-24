@@ -16,7 +16,7 @@
 
 import { unpack } from 'struct';
 
-import defs from 'u1905.defs';
+import defs from 'umap.defs';
 
 const Queue = {
 	push: function(item) {

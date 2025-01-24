@@ -19,8 +19,8 @@ import { popen, readfile } from 'fs';
 import { unpack } from 'struct';
 import { cursor } from 'uci';
 
-import utils from 'u1905.utils';
-import log from 'u1905.log';
+import utils from 'umap.utils';
+import log from 'umap.log';
 
 /* shared constants */
 export const WPS_AUTH_OPEN = 0x0001;

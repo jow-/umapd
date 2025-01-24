@@ -14,10 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-import log from 'u1905.log';
-import defs from 'u1905.defs';
-import model from 'u1905.model';
-import utils from 'u1905.utils';
+import log from 'umap.log';
+import defs from 'umap.defs';
+import model from 'umap.model';
+import utils from 'umap.utils';
 
 import { connect as ubus_connect, error as ubus_error } from 'ubus';
 

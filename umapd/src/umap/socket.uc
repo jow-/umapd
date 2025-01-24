@@ -15,11 +15,11 @@
  */
 
 import { request as rtrequest, 'const' as rtconst } from 'rtnl';
-import { socket, error as sockerr } from 'u1905.socket.raw';
+import { socket, error as sockerr } from 'umap.socket.raw';
 import { pack } from 'struct';
 
-import utils from 'u1905.utils';
-import log from 'u1905.log';
+import utils from 'umap.utils';
+import log from 'umap.log';
 
 let err;
 
