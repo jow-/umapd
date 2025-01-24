@@ -231,6 +231,9 @@ function perform_wps(args) {
 		// Deconfigure radio
 		system(['/sbin/wifi', 'down', args.radio]);
 
+		// Give netifd some time to process the request
+		sleep(100);
+
 		// Delete all wifi-iface definitions
 		delete_wifi_ifaces(args.radio);
 
