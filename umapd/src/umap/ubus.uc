@@ -28,7 +28,7 @@ const I1905UbusProcedures = {
 		args: {
 			ubus_rpc_session: "00000000000000000000000000000000"
 		},
-		call: function(req) {
+		call: function (req) {
 			let interfaces = [];
 
 			for (let i1905lif in model.getLocalInterfaces()) {
@@ -51,7 +51,7 @@ const I1905UbusProcedures = {
 			ubus_rpc_session: "00000000000000000000000000000000",
 			macaddress: "00:00:00:00:00:00"
 		},
-		call: function(req) {
+		call: function (req) {
 			let mac = lc(req.args.macaddress ?? '00:00:00:00:00:00');
 
 			if (!match(mac, /^[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]$/i))
@@ -105,7 +105,7 @@ const I1905UbusProcedures = {
 		args: {
 			ubus_rpc_session: "00000000000000000000000000000000"
 		},
-		call: function(req) {
+		call: function (req) {
 			let res = {
 				devices: [],
 				links: []
@@ -143,7 +143,7 @@ const I1905UbusProcedures = {
 		args: {
 			ubus_rpc_session: "00000000000000000000000000000000"
 		},
-		call: function(req) {
+		call: function (req) {
 			let devices = {};
 
 			for (let i1905dev in model.getDevices()) {
@@ -167,22 +167,22 @@ const I1905UbusProcedures = {
 };
 
 export default {
-	connect: function() {
+	connect: function () {
 		ubusconn ??= ubus_connect();
 
 		return (ubusconn != null);
 	},
 
-	error: function() {
+	error: function () {
 		return ubus_error();
 	},
 
-	publish: function() {
+	publish: function () {
 		if (this.connect())
 			return ubusconn.publish("ieee1905", I1905UbusProcedures);
 	},
 
-	call: function(object, method, args) {
+	call: function (object, method, args) {
 		if (this.connect())
 			return ubusconn.call(object, method, args);
 	}

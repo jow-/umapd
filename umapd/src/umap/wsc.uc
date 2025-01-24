@@ -57,15 +57,14 @@ const WPS_VERSION = 0x20;
 let last_m1 = null;
 let last_key = null;
 
-function build_plain_settings(desiredConfiguration)
-{
-    let buf = buffer();
+function build_plain_settings(desiredConfiguration) {
+	let buf = buffer();
 
-    buf.put("!HH*", ATTR_SSID, length(desiredConfiguration.ssid), desiredConfiguration.ssid);
-    buf.put("!HHH", ATTR_AUTH_TYPE_FLAGS, 2, desiredConfiguration.authentication_types);
-    buf.put("!HHH", ATTR_ENCR_TYPE_FLAGS, 2, desiredConfiguration.encryption_types);
-    buf.put("!HH*", ATTR_NETWORK_KEY, length(desiredConfiguration.network_key), desiredConfiguration.network_key);
-    buf.put("!HH6s", ATTR_MAC_ADDR, 6, utils.ether_aton(desiredConfiguration.bssid)); // XXX: how to allocate?
+	buf.put("!HH*", ATTR_SSID, length(desiredConfiguration.ssid), desiredConfiguration.ssid);
+	buf.put("!HHH", ATTR_AUTH_TYPE_FLAGS, 2, desiredConfiguration.authentication_types);
+	buf.put("!HHH", ATTR_ENCR_TYPE_FLAGS, 2, desiredConfiguration.encryption_types);
+	buf.put("!HH*", ATTR_NETWORK_KEY, length(desiredConfiguration.network_key), desiredConfiguration.network_key);
+	buf.put("!HH6s", ATTR_MAC_ADDR, 6, utils.ether_aton(desiredConfiguration.bssid)); // XXX: how to allocate?
 
 	desiredConfiguration.multi_ap ??= {};
 	desiredConfiguration.multi_ap.is_backhaul_sta ??= false;
@@ -75,21 +74,20 @@ function build_plain_settings(desiredConfiguration)
 	desiredConfiguration.multi_ap.profile1_backhaul_sta_assoc_dissallowed ??= false;
 	desiredConfiguration.multi_ap.profile2_backhaul_sta_assoc_dissallowed ??= false;
 
-    buf.put("!HH3sBBB", ATTR_VENDOR_EXTENSION, 6, WPS_VENDOR_ID_WFA,
+	buf.put("!HH3sBBB", ATTR_VENDOR_EXTENSION, 6, WPS_VENDOR_ID_WFA,
 		WFA_ELEM_MULTI_AP, 1, 0
-			| (desiredConfiguration.multi_ap.is_backhaul_sta << 0)
-			| (desiredConfiguration.multi_ap.is_backhaul_bss << 1)
-			| (desiredConfiguration.multi_ap.is_fronthaul_bss << 2)
-			| (desiredConfiguration.multi_ap.tear_down << 3)
-			| (desiredConfiguration.multi_ap.profile1_backhaul_sta_assoc_dissallowed << 4)
-			| (desiredConfiguration.multi_ap.profile2_backhaul_sta_assoc_dissallowed << 5)
-    );
+		| (desiredConfiguration.multi_ap.is_backhaul_sta << 0)
+		| (desiredConfiguration.multi_ap.is_backhaul_bss << 1)
+		| (desiredConfiguration.multi_ap.is_fronthaul_bss << 2)
+		| (desiredConfiguration.multi_ap.tear_down << 3)
+		| (desiredConfiguration.multi_ap.profile1_backhaul_sta_assoc_dissallowed << 4)
+	| (desiredConfiguration.multi_ap.profile2_backhaul_sta_assoc_dissallowed << 5)
+	);
 
-    return buf.pull();
+	return buf.pull();
 }
 
-function derive_wps_keys(key, personalization_string, required_length)
-{
+function derive_wps_keys(key, personalization_string, required_length) {
 	let result = "";
 
 	for (let i = 1; length(result) < required_length; i++)
@@ -99,8 +97,7 @@ function derive_wps_keys(key, personalization_string, required_length)
 	return substr(result, 0, required_length);
 }
 
-function derive_registrar_uuid()
-{
+function derive_registrar_uuid() {
 	let hash = 0;
 
 	for (let b in unpack("6B", hexdec(model.address, ":")))
@@ -128,8 +125,7 @@ function derive_registrar_uuid()
 	return uuid;
 }
 
-export function wscBuildM1(radio)
-{
+export function wscBuildM1(radio) {
 	let local_device = model.getLocalDevice();
 	let buf = buffer();
 
@@ -177,20 +173,19 @@ export function wscBuildM1(radio)
 	last_m1 = buf.pull();
 	last_key = { key: priv_key, mac: radio.address };
 
-	return [ last_m1, last_key ];
+	return [last_m1, last_key];
 };
 
-export function wscProcessM1(m1)
-{
+export function wscProcessM1(m1) {
 	let msg = buffer(m1);
 	let settings = {};
 
 	while (true) {
 		let attr_type = msg.get('!H');
-        let attr_len  = msg.get('!H');
+		let attr_len = msg.get('!H');
 
 		if (attr_type == null)
-            break;
+			break;
 
 		if (attr_type == ATTR_UUID_E && attr_len == 16)
 			settings.uuid = utils.uuid_ntoa(msg.get(16));
@@ -201,107 +196,106 @@ export function wscProcessM1(m1)
 		else if (attr_type == ATTR_PUBLIC_KEY && attr_len > 0)
 			settings.public_key = msg.get(attr_len);
 		else if (attr_type == ATTR_AUTH_TYPE_FLAGS && attr_len == 2)
-            settings.supported_authentication_types = msg.get('!H');
+			settings.supported_authentication_types = msg.get('!H');
 		else if (attr_type == ATTR_ENCR_TYPE_FLAGS && attr_len == 2)
-            settings.supported_encryption_types = msg.get('!H');
+			settings.supported_encryption_types = msg.get('!H');
 		else if (attr_type == ATTR_MANUFACTURER && attr_len > 0)
 			settings.manufacturer = msg.get(attr_len);
 		else if (attr_type == ATTR_MODEL_NAME && attr_len > 0)
 			settings.model_name = msg.get(attr_len);
 		else if (attr_type == ATTR_MODEL_NUMBER && attr_len > 0)
 			settings.model_number = msg.get(attr_len);
-        else if (attr_type == ATTR_SERIAL_NUMBER && attr_len > 0)
-            settings.serial_number = msg.get(attr_len);
-        else if (attr_type == ATTR_DEV_NAME && attr_len > 0)
-            settings.device_name = msg.get(attr_len);
+		else if (attr_type == ATTR_SERIAL_NUMBER && attr_len > 0)
+			settings.serial_number = msg.get(attr_len);
+		else if (attr_type == ATTR_DEV_NAME && attr_len > 0)
+			settings.device_name = msg.get(attr_len);
 		else if (attr_type == ATTR_RF_BANDS && attr_len == 1)
 			settings.supported_bands = msg.get('B');
 		else
 			msg.pos(msg.pos() + attr_len);
-    }
+	}
 
-    return settings;
+	return settings;
 };
 
-export function wscBuildM2(m1, desiredConfiguration)
-{
+export function wscBuildM2(m1, desiredConfiguration) {
 	let local_device = model.getLocalDevice();
 	let msg = buffer(m1);
 
-    let m1_mac_address, m1_nonce, m1_pubkey;
+	let m1_mac_address, m1_nonce, m1_pubkey;
 
-    while (true) {
-        let attr_type = msg.get('!H');
-        let attr_len = msg.get('!H');
+	while (true) {
+		let attr_type = msg.get('!H');
+		let attr_len = msg.get('!H');
 
 		if (attr_type == null)
 			break;
 
-        if (attr_type == ATTR_MAC_ADDR && attr_len == 6)
-            m1_mac_address = msg.get(6);
-        else if (attr_type == ATTR_ENROLLEE_NONCE && attr_len == 16)
-            m1_nonce = msg.get(16);
-        else if (attr_type == ATTR_PUBLIC_KEY && attr_len > 0)
-            m1_pubkey = msg.get(attr_len);
+		if (attr_type == ATTR_MAC_ADDR && attr_len == 6)
+			m1_mac_address = msg.get(6);
+		else if (attr_type == ATTR_ENROLLEE_NONCE && attr_len == 16)
+			m1_nonce = msg.get(16);
+		else if (attr_type == ATTR_PUBLIC_KEY && attr_len > 0)
+			m1_pubkey = msg.get(attr_len);
 		else
 			msg.pos(msg.pos() + attr_len);
-    }
+	}
 
-    if (!m1_mac_address || !m1_nonce || !m1_pubkey)
+	if (!m1_mac_address || !m1_nonce || !m1_pubkey)
 		return log.warn(`wsc: ignoring incomplete message received - ignoring M1`);
 
 	let buf = buffer();
 
-    buf.put("!HHB", ATTR_VERSION, 1, 0x10);
-    buf.put("!HHB", ATTR_MSG_TYPE, 1, WPS_M2);
-    buf.put("!HH16s", ATTR_ENROLLEE_NONCE, 16, m1_nonce);
+	buf.put("!HHB", ATTR_VERSION, 1, 0x10);
+	buf.put("!HHB", ATTR_MSG_TYPE, 1, WPS_M2);
+	buf.put("!HH16s", ATTR_ENROLLEE_NONCE, 16, m1_nonce);
 
-    let registrar_nonce = readfile("/dev/urandom", 16);
-    buf.put("!HH16s", ATTR_REGISTRAR_NONCE, 16, registrar_nonce);
+	let registrar_nonce = readfile("/dev/urandom", 16);
+	buf.put("!HH16s", ATTR_REGISTRAR_NONCE, 16, registrar_nonce);
 
-    buf.put("!HH16B", ATTR_UUID_R, 16, ...derive_registrar_uuid());
+	buf.put("!HH16B", ATTR_UUID_R, 16, ...derive_registrar_uuid());
 
-    let keypair = dh_keypair();
-    let local_privkey = keypair?.[0];
-    let local_pubkey = keypair?.[1];
-    buf.put("!HH*", ATTR_PUBLIC_KEY, length(local_pubkey), local_pubkey);
+	let keypair = dh_keypair();
+	let local_privkey = keypair?.[0];
+	let local_pubkey = keypair?.[1];
+	buf.put("!HH*", ATTR_PUBLIC_KEY, length(local_pubkey), local_pubkey);
 
-    //buf.put("!HHH", ATTR_AUTH_TYPE_FLAGS, 2, desiredConfiguration.authentication_types);
-    //buf.put("!HHH", ATTR_ENCR_TYPE_FLAGS, 2, desiredConfiguration.encryption_types);
+	//buf.put("!HHH", ATTR_AUTH_TYPE_FLAGS, 2, desiredConfiguration.authentication_types);
+	//buf.put("!HHH", ATTR_ENCR_TYPE_FLAGS, 2, desiredConfiguration.encryption_types);
 
-    buf.put("!HHB", ATTR_CONN_TYPE_FLAGS, 1, WPS_CONN_ESS);
-    buf.put("!HHH", ATTR_CONFIG_METHODS, 2, WPS_CONFIG_PUSHBUTTON);
+	buf.put("!HHB", ATTR_CONN_TYPE_FLAGS, 1, WPS_CONN_ESS);
+	buf.put("!HHH", ATTR_CONFIG_METHODS, 2, WPS_CONFIG_PUSHBUTTON);
 
 	const id = local_device.getIdentification();
 
-    buf.put("!HH*", ATTR_MANUFACTURER, length(id?.manufacturer_name), id?.manufacturer_name ?? '');
-    buf.put("!HH*", ATTR_MODEL_NAME, length(id?.manufacturer_model), id?.manufacturer_model ?? '');
-    buf.put("!HH*", ATTR_MODEL_NUMBER, length('unspecified'), 'unspecified');
-    buf.put("!HH*", ATTR_SERIAL_NUMBER, length('unspecified'), 'unspecified');
+	buf.put("!HH*", ATTR_MANUFACTURER, length(id?.manufacturer_name), id?.manufacturer_name ?? '');
+	buf.put("!HH*", ATTR_MODEL_NAME, length(id?.manufacturer_model), id?.manufacturer_model ?? '');
+	buf.put("!HH*", ATTR_MODEL_NUMBER, length('unspecified'), 'unspecified');
+	buf.put("!HH*", ATTR_SERIAL_NUMBER, length('unspecified'), 'unspecified');
 
-    let oui = "\x00\x50\xf2\x00";
-    buf.put("!HHH4sH", ATTR_PRIMARY_DEV_TYPE, 8, WPS_DEV_NETWORK_INFRA, oui, WPS_DEV_NETWORK_INFRA_ROUTER);
+	let oui = "\x00\x50\xf2\x00";
+	buf.put("!HHH4sH", ATTR_PRIMARY_DEV_TYPE, 8, WPS_DEV_NETWORK_INFRA, oui, WPS_DEV_NETWORK_INFRA_ROUTER);
 
-    buf.put("!HH*", ATTR_DEV_NAME, length(id?.friendly_name), id?.friendly_name ?? '');
+	buf.put("!HH*", ATTR_DEV_NAME, length(id?.friendly_name), id?.friendly_name ?? '');
 
-    buf.put("!HHB", ATTR_RF_BANDS, 1, desiredConfiguration.band);
+	buf.put("!HHB", ATTR_RF_BANDS, 1, desiredConfiguration.band);
 
-    buf.put("!HHH", ATTR_ASSOC_STATE, 2, WPS_ASSOC_CONN_SUCCESS);
-    buf.put("!HHH", ATTR_CONFIG_ERROR, 2, WPS_CFG_NO_ERROR);
-    buf.put("!HHH", ATTR_DEV_PASSWORD_ID, 2, DEV_PW_PUSHBUTTON);
-    buf.put("!HHI", ATTR_OS_VERSION, 4, 0x80000001);
+	buf.put("!HHH", ATTR_ASSOC_STATE, 2, WPS_ASSOC_CONN_SUCCESS);
+	buf.put("!HHH", ATTR_CONFIG_ERROR, 2, WPS_CFG_NO_ERROR);
+	buf.put("!HHH", ATTR_DEV_PASSWORD_ID, 2, DEV_PW_PUSHBUTTON);
+	buf.put("!HHI", ATTR_OS_VERSION, 4, 0x80000001);
 
-    buf.put("!HH3sBBB", ATTR_VENDOR_EXTENSION, 6, WPS_VENDOR_ID_WFA,
+	buf.put("!HH3sBBB", ATTR_VENDOR_EXTENSION, 6, WPS_VENDOR_ID_WFA,
 		WFA_ELEM_VERSION2, 1, WPS_VERSION);
 
-    let shared_secret = dh_sharedkey(local_privkey, m1_pubkey);
-    let dhkey = sha256(shared_secret);
-    let kdk = hmac_sha256(dhkey, m1_nonce + m1_mac_address + registrar_nonce);
-    let keys = derive_wps_keys(kdk, "Wi-Fi Easy and Secure Key Derivation", 80);
-    let authkey = substr(keys, 0, 32);
-    let keywrapkey = substr(keys, 32, 16);
+	let shared_secret = dh_sharedkey(local_privkey, m1_pubkey);
+	let dhkey = sha256(shared_secret);
+	let kdk = hmac_sha256(dhkey, m1_nonce + m1_mac_address + registrar_nonce);
+	let keys = derive_wps_keys(kdk, "Wi-Fi Easy and Secure Key Derivation", 80);
+	let authkey = substr(keys, 0, 32);
+	let keywrapkey = substr(keys, 32, 16);
 
-    let plain_settings = build_plain_settings(desiredConfiguration);
+	let plain_settings = build_plain_settings(desiredConfiguration);
 	let key_wrap_auth = substr(hmac_sha256(authkey, plain_settings), 0, 8);
 	let wrap_settings = buffer(plain_settings);
 	wrap_settings.end().put('!HH8s', ATTR_KEY_WRAP_AUTH, 8, key_wrap_auth);
@@ -309,54 +303,53 @@ export function wscBuildM2(m1, desiredConfiguration)
 	let pad_bytes = 16 - (wrap_settings.length() % 16);
 	wrap_settings.set(pad_bytes, wrap_settings.pos(), wrap_settings.pos() + pad_bytes);
 
-    let iv = readfile("/dev/urandom", 16);
-    let encrypted_settings = aes_encrypt(keywrapkey, iv, wrap_settings.pull());
-    buf.put("!HH*", ATTR_ENCR_SETTINGS, length(iv) + length(encrypted_settings), iv + encrypted_settings);
+	let iv = readfile("/dev/urandom", 16);
+	let encrypted_settings = aes_encrypt(keywrapkey, iv, wrap_settings.pull());
+	buf.put("!HH*", ATTR_ENCR_SETTINGS, length(iv) + length(encrypted_settings), iv + encrypted_settings);
 
 	let authenticator = hmac_sha256(authkey, m1 + buf.slice());
 	buf.put('!HH8s', ATTR_AUTHENTICATOR, 8, substr(authenticator, 0, 8));
 
-    return buf.pull();
+	return buf.pull();
 };
 
-export function wscProcessM2(key, m1, m2)
-{
+export function wscProcessM2(key, m1, m2) {
 	// Extract necessary data from M1 && M2
 	let m1_nonce, m2_nonce, m2_pubkey, m2_encrypted_settings, m2_authenticator;
 	let msg = buffer(m1);
 	let settings = {};
 
-    while (true) {
-        let attr_type = msg.get('!H');
-        let attr_len = msg.get('!H');
+	while (true) {
+		let attr_type = msg.get('!H');
+		let attr_len = msg.get('!H');
 
 		if (attr_type == null)
 			break;
 
-        if (attr_type == ATTR_ENROLLEE_NONCE && attr_len == 16)
-            m1_nonce = msg.get("!16s");
-    }
+		if (attr_type == ATTR_ENROLLEE_NONCE && attr_len == 16)
+			m1_nonce = msg.get("!16s");
+	}
 
-    if (!m1_nonce)
-        return log.warn("Incomplete M1 message received");
+	if (!m1_nonce)
+		return log.warn("Incomplete M1 message received");
 
 	msg = buffer(m2);
 
 	while (true) {
 		let attr_type = msg.get('!H');
-        let attr_len  = msg.get('!H');
+		let attr_len = msg.get('!H');
 
 		if (attr_type == null)
-            break;
+			break;
 
 		if (attr_type == ATTR_REGISTRAR_NONCE && attr_len == 16)
 			m2_nonce = msg.get(attr_len);
 		else if (attr_type == ATTR_PUBLIC_KEY && attr_len > 0)
-            m2_pubkey = msg.get(attr_len);
+			m2_pubkey = msg.get(attr_len);
 		else if (attr_type == ATTR_AUTH_TYPE_FLAGS && attr_len == 2)
-            settings.supported_authentication_types = msg.get('!H');
+			settings.supported_authentication_types = msg.get('!H');
 		else if (attr_type == ATTR_ENCR_TYPE_FLAGS && attr_len == 2)
-            settings.supported_encryption_types = msg.get('!H');
+			settings.supported_encryption_types = msg.get('!H');
 		else if (attr_type == ATTR_ENCR_SETTINGS && attr_len >= 32)
 			m2_encrypted_settings = msg.get(attr_len);
 		else if (attr_type == ATTR_AUTHENTICATOR && attr_len == 8)
@@ -367,15 +360,15 @@ export function wscProcessM2(key, m1, m2)
 			settings.model_name = msg.get(attr_len);
 		else if (attr_type == ATTR_MODEL_NUMBER && attr_len > 0)
 			settings.model_number = msg.get(attr_len);
-        else if (attr_type == ATTR_SERIAL_NUMBER && attr_len > 0)
-            settings.serial_number = msg.get(attr_len);
-        else if (attr_type == ATTR_DEV_NAME && attr_len > 0)
-            settings.device_name = msg.get(attr_len);
+		else if (attr_type == ATTR_SERIAL_NUMBER && attr_len > 0)
+			settings.serial_number = msg.get(attr_len);
+		else if (attr_type == ATTR_DEV_NAME && attr_len > 0)
+			settings.device_name = msg.get(attr_len);
 		else if (attr_type == ATTR_RF_BANDS && attr_len == 1)
 			settings.bands = msg.get('B');
 		else
 			msg.pos(msg.pos() + attr_len);
-    }
+	}
 
 	if (!m2_nonce || !m2_pubkey || !m2_encrypted_settings || !m2_authenticator)
 		return log.warn("Incomplete M2 message received");
@@ -413,12 +406,12 @@ export function wscProcessM2(key, m1, m2)
 		if (attr_type == ATTR_SSID && attr_len > 0)
 			settings.ssid = msg.get(attr_len);
 		else if (attr_type == ATTR_AUTH_TYPE_FLAGS && attr_len == 2)
-            settings.authentication_types = msg.get('!H');
+			settings.authentication_types = msg.get('!H');
 		else if (attr_type == ATTR_ENCR_TYPE_FLAGS && attr_len == 2)
 			settings.encryption_types = msg.get('!H');
 		else if (attr_type == ATTR_NETWORK_KEY && attr_len > 0)
 			settings.network_key = msg.get(attr_len);
-        else if (attr_type == ATTR_MAC_ADDR && attr_len == 6)
+		else if (attr_type == ATTR_MAC_ADDR && attr_len == 6)
 			settings.bssid = utils.ether_ntoa(msg.get(6));
 		else if (attr_type == ATTR_VENDOR_EXTENSION && attr_len >= 5) {
 			const oui = msg.get('3s');
@@ -431,7 +424,7 @@ export function wscProcessM2(key, m1, m2)
 				settings.multi_ap = {
 					is_backhaul_sta: !!(multi_ap_flags & 0x1),
 					is_backhaul_bss: !!(multi_ap_flags & 0x2),
-					is_fronthaul_bss:  !!(multi_ap_flags & 0x4),
+					is_fronthaul_bss: !!(multi_ap_flags & 0x4),
 					tear_down: !!(multi_ap_flags & 0x8),
 					profile1_backhaul_sta_assoc_dissallowed: !!(multi_ap_flags & 0x10),
 					profile2_backhaul_sta_assoc_dissallowed: !!(multi_ap_flags & 0x20)
@@ -445,12 +438,11 @@ export function wscProcessM2(key, m1, m2)
 			msg.pos(msg.pos() + attr_len);
 	}
 
-    return settings;
+	return settings;
 };
 
-export function wscGetType(m)
-{
-	for (let off = 0; off < length(m); ) {
+export function wscGetType(m) {
+	for (let off = 0; off < length(m);) {
 		let tl = unpack("!HH", m, off); off += 4;
 
 		if (tl[0] == ATTR_MSG_TYPE) {
@@ -458,9 +450,9 @@ export function wscGetType(m)
 				return log.warn(`wsc: message has invalid ATTR_MSG_TYPE length ${tl[1]}`);
 
 			switch (ord(m, off)) {
-			case WPS_M1: return 1;
-			case WPS_M2: return 2;
-			default:     return null;
+				case WPS_M1: return 1;
+				case WPS_M2: return 2;
+				default: return null;
 			}
 		}
 

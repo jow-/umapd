@@ -50,7 +50,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 			log.debug('  TLV %02x (%s) - %d byte',
 				msg.tlvs[i],
 				utils.tlv_type_ntoa(msg.tlvs[i]),
-				msg.tlvs[i+2] - msg.tlvs[i+1]);
+				msg.tlvs[i + 2] - msg.tlvs[i + 1]);
 
 	// ignore packets looped back to us
 	if (al_mac == model.address) {
@@ -72,9 +72,9 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		if (!dev) {
 			dev = model.addDevice(al_mac);
 
-		    // is a neighbour not known to us yet, assume it is new
-		    // and send a counter topology discovery message to speed
-		    // up the neighbour discovering us
+			// is a neighbour not known to us yet, assume it is new
+			// and send a counter topology discovery message to speed
+			// up the neighbour discovering us
 			query = cmdu.create(defs.MSG_TOPOLOGY_DISCOVERY);
 			query.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
 			query.add_tlv(defs.TLV_MAC_ADDRESS, i1905lif.address);
@@ -340,62 +340,62 @@ function emit_topology_notification() {
 uloop.init();
 
 let opts = sys.getopt([
-    'interface|iface|i=s*',
-    'radio|phy|r=s*',
-    'controller',
-    'mac=s',
-    'help'
+	'interface|iface|i=s*',
+	'radio|phy|r=s*',
+	'controller',
+	'mac=s',
+	'help'
 ]);
 
 if ('help' in opts) {
-    print(
-        'Usage:\n',
-        `       ${ARGV[0]} --help\n`,
-        `       ${ARGV[0]} [--role=role] [--mac=02:00:00:00:00:01] [--interface eth0 ...] [--radio phy0 ...]\n`,
-        '\n',
-        '--interface IFNAME\n',
-        '  Use the given network interface as backhaul link\n',
-        '\n',
-        '--radio PHYNAME\n',
-        '  Manage the given radio identified by the wiphy name\n',
-        '\n',
-        '--controller\n',
-        '  Act as Multi-AP controller\n',
-        '\n',
-        '--mac MACADDR\n',
-        '  Specify the AL MAC address to use. If omitted, a suitable address is generated\n'
-    );
+	print(
+		'Usage:\n',
+		`       ${ARGV[0]} --help\n`,
+		`       ${ARGV[0]} [--role=role] [--mac=02:00:00:00:00:01] [--interface eth0 ...] [--radio phy0 ...]\n`,
+		'\n',
+		'--interface IFNAME\n',
+		'  Use the given network interface as backhaul link\n',
+		'\n',
+		'--radio PHYNAME\n',
+		'  Manage the given radio identified by the wiphy name\n',
+		'\n',
+		'--controller\n',
+		'  Act as Multi-AP controller\n',
+		'\n',
+		'--mac MACADDR\n',
+		'  Specify the AL MAC address to use. If omitted, a suitable address is generated\n'
+	);
 }
 
 if (!length(opts.radio)) {
-    log.error('Require at least one radio\n');
-    exit(1);
+	log.error('Require at least one radio\n');
+	exit(1);
 }
 else {
-    for (let radio in opts.radio) {
-        if (!model.addRadio(radio)) {
-            log.error(`Radio phy '${radio}' unusable - aborting.\n`);
-            exit(1);
-        }
-    }
+	for (let radio in opts.radio) {
+		if (!model.addRadio(radio)) {
+			log.error(`Radio phy '${radio}' unusable - aborting.\n`);
+			exit(1);
+		}
+	}
 }
 
 if (!length(opts.interface)) {
-    log.error('Require at least one interface\n');
-    //exit(1);
+	log.error('Require at least one interface\n');
+	//exit(1);
 }
 else {
-    for (let ifname in opts.interface) {
-        let ifc = model.addLocalInterface(ifname);
-        if (ifc) {
-            uloop.handle(ifc.i1905rxsock, handle_i1905_input, uloop.ULOOP_READ|uloop.ULOOP_EDGE_TRIGGER);
-            uloop.handle(ifc.lldprxsock, handle_lldp_input, uloop.ULOOP_READ|uloop.ULOOP_EDGE_TRIGGER);
-        }
-        else {
-            log.error(`Unable to initialize interface ${ifname}: ${socket.error()}`);
-            exit(1);
-        }
-    }
+	for (let ifname in opts.interface) {
+		let ifc = model.addLocalInterface(ifname);
+		if (ifc) {
+			uloop.handle(ifc.i1905rxsock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+			uloop.handle(ifc.lldprxsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+		}
+		else {
+			log.error(`Unable to initialize interface ${ifname}: ${socket.error()}`);
+			exit(1);
+		}
+	}
 }
 
 model.isController = !!opts.controller;

@@ -40,19 +40,19 @@ export const WPS_RF_6GHZ = 0x80; // NOT defined in WSC standard, local use only
 
 function uci_band_to_rf_band(band) {
 	switch (band) {
-	case '2g': return WPS_RF_2GHZ;
-	case '5g': return WPS_RF_5GHZ;
-	case '6g': return WPS_RF_6GHZ;
-	case '60g': return WPS_RF_60GHZ;
+		case '2g': return WPS_RF_2GHZ;
+		case '5g': return WPS_RF_5GHZ;
+		case '6g': return WPS_RF_6GHZ;
+		case '60g': return WPS_RF_60GHZ;
 	}
 }
 
 function rf_band_ntoa(band) {
 	switch (band) {
-	case WPS_RF_2GHZ: return '2.4GHz';
-	case WPS_RF_5GHZ: return '5GHz';
-	case WPS_RF_6GHZ: return '6GHz';
-	case WPS_RF_60GHZ: return '60GHz';
+		case WPS_RF_2GHZ: return '2.4GHz';
+		case WPS_RF_5GHZ: return '5GHz';
+		case WPS_RF_6GHZ: return '6GHz';
+		case WPS_RF_60GHZ: return '60GHz';
 	}
 }
 
@@ -103,8 +103,7 @@ const OPERATING_CLASSES = [
 	{ opc: 189, band: WPS_RF_60GHZ, channels: [14], width: 8640, edmg: true }
 ];
 
-function frequencyToBand(frequency)
-{
+function frequencyToBand(frequency) {
 	if (frequency >= 2412 && frequency <= 2484)
 		return WPS_RF_2GHZ;
 	else if (frequency >= 4910 && frequency <= 4980)
@@ -117,8 +116,7 @@ function frequencyToBand(frequency)
 		return WPS_RF_60GHZ;
 }
 
-function frequencyToChannel(frequency)
-{
+function frequencyToChannel(frequency) {
 	if (frequency == 2484)
 		return 14;
 	else if (frequency == 5935)
@@ -135,8 +133,7 @@ function frequencyToChannel(frequency)
 		return (frequency - 56160) / 2160;
 }
 
-function mbmToMw(dbm)
-{
+function mbmToMw(dbm) {
 	const LOG10_MAGIC = 1.25892541179;
 	let res = 1.0;
 	let ip = dbm / 10;
@@ -157,8 +154,7 @@ function mbmToMw(dbm)
  * @param {object} phy - NL80211_CMD_GET_WIPHY reply message
  * @returns {number[]} Array of supported widths in MHz
  */
-function getSupportedWidths(phy)
-{
+function getSupportedWidths(phy) {
 	const widths = [];
 
 	for (let band in phy.wiphy_bands) {
@@ -200,8 +196,7 @@ function getSupportedWidths(phy)
  * @param {object} phy - NL80211_CMD_GET_WIPHY reply message
  * @returns {OperatingClass[]} Array of supported OperatingClass objects
  */
-function getSupportedOperatingClasses(phy)
-{
+function getSupportedOperatingClasses(phy) {
 	const supportedClasses = [];
 	const supportedWidths = getSupportedWidths(phy);
 
@@ -253,8 +248,8 @@ function getSupportedOperatingClasses(phy)
 }
 
 const IRadio = {
-	deriveUUID: function() {
-		const bytes = this.address ? unpack("6B", hexdec(this.address, ":")) : [ this.info?.wiphy ?? 0 ];
+	deriveUUID: function () {
+		const bytes = this.address ? unpack("6B", hexdec(this.address, ":")) : [this.info?.wiphy ?? 0];
 
 		let h = 0;
 
@@ -283,7 +278,7 @@ const IRadio = {
 		];
 	},
 
-	getBasicCapabilities: function() {
+	getBasicCapabilities: function () {
 		const caps = {
 			radio_unique_identifier: this.address,
 			opclasses_supported: getSupportedOperatingClasses(this.info),
@@ -303,59 +298,59 @@ const IRadio = {
 		return caps;
 	},
 
-	inferWSCAuthenticationSuites: function() {
+	inferWSCAuthenticationSuites: function () {
 		let auth_suites = WPS_AUTH_OPEN;
 
 		for (let suite in this.info?.cipher_suites) {
 			switch (suite) {
-			//case 0x000FAC01:
-			//case 0x000FAC05:
-			//	auth_suites |= WPS_AUTH_WEP;
-			//	break;
-			case 0x000FAC02:
-				auth_suites |= WPS_AUTH_WPA | WPS_AUTH_WPAPSK;
-				break;
-			case 0x000FAC04:
-				auth_suites |= WPS_AUTH_WPA2 | WPS_AUTH_WPA2PSK;
-				break;
-			case 0x000FAC08:
-			case 0x000FAC09:
-			case 0x000FAC0A:
-				auth_suites |= WPS_AUTH_SAE;
-				break;
+				//case 0x000FAC01:
+				//case 0x000FAC05:
+				//	auth_suites |= WPS_AUTH_WEP;
+				//	break;
+				case 0x000FAC02:
+					auth_suites |= WPS_AUTH_WPA | WPS_AUTH_WPAPSK;
+					break;
+				case 0x000FAC04:
+					auth_suites |= WPS_AUTH_WPA2 | WPS_AUTH_WPA2PSK;
+					break;
+				case 0x000FAC08:
+				case 0x000FAC09:
+				case 0x000FAC0A:
+					auth_suites |= WPS_AUTH_SAE;
+					break;
 			}
 		}
 
 		return auth_suites;
 	},
 
-	inferWSCEncryptionTypes: function() {
+	inferWSCEncryptionTypes: function () {
 		let encryption_types = WPS_ENCR_NONE;
 
 		for (let suite in this.info?.cipher_suites) {
 			switch (suite) {
-			//case 0x000FAC01:
-			//	encryption_types |= WPS_ENCR_WEP40;
-			//	break;
-			case 0x000FAC02:
-				encryption_types |= WPS_ENCR_TKIP;
-				break;
-			case 0x000FAC04:
-			case 0x000FAC08:
-			case 0x000FAC09:
-			case 0x000FAC0A:
-				encryption_types |= WPS_ENCR_AES;
-				break;
-			//case 0x000FAC05:
-			//	encryption_types |= WPS_ENCR_WEP104;
-			//	break;
+				//case 0x000FAC01:
+				//	encryption_types |= WPS_ENCR_WEP40;
+				//	break;
+				case 0x000FAC02:
+					encryption_types |= WPS_ENCR_TKIP;
+					break;
+				case 0x000FAC04:
+				case 0x000FAC08:
+				case 0x000FAC09:
+				case 0x000FAC0A:
+					encryption_types |= WPS_ENCR_AES;
+					break;
+				//case 0x000FAC05:
+				//	encryption_types |= WPS_ENCR_WEP104;
+				//	break;
 			}
 		}
 
 		return encryption_types;
 	},
 
-	inferWSCRFBands: function() {
+	inferWSCRFBands: function () {
 		let bands = 0;
 
 		for (let band in this.info?.wiphy_bands) {
@@ -376,7 +371,7 @@ const IRadio = {
 export default {
 	radios: [],
 
-	addRadio: function(phyname) {
+	addRadio: function (phyname) {
 		let existing = filter(this.radios, radio => radio.phyname == phyname)[0];
 		if (existing != null) {
 			log.warn(`Radio phy '${phyname}' already present`);
@@ -445,11 +440,11 @@ export default {
 		return radio;
 	},
 
-	lookupRadiosByBand: function(band) {
+	lookupRadiosByBand: function (band) {
 		return filter(this.radios, radio => matchBand(radio.band, band));
 	},
 
-	lookupRadioByIfname: function(ifname) {
+	lookupRadioByIfname: function (ifname) {
 		const phyidx = readfile(`/sys/class/net/${ifname}/phy80211/index`);
 
 		for (let radio in this.radios)

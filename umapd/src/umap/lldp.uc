@@ -20,11 +20,11 @@ import utils from 'umap.utils';
 import defs from 'umap.defs';
 
 export default {
-	create: function(chassis, port, ttl) {
+	create: function (chassis, port, ttl) {
 		return proto({ chassis, port, ttl }, this);
 	},
 
-	parse: function(payload) {
+	parse: function (payload) {
 		let chassis, port, ttl;
 		let offset = 0;
 
@@ -68,7 +68,7 @@ export default {
 		return proto({ chassis, port, ttl }, this);
 	},
 
-	send: function(socket) {
+	send: function (socket) {
 		return socket.send(socket.address, defs.LLDP_NEAREST_BRIDGE_MAC, pack('!3B6s 3B6s 2BH H',
 			(0x1 << 1), 7, 4,			// Chassis ID TLV, subtype 4 (LL address)
 			hexdec(this.chassis, ':'),	// Chassis ID TLV MAC

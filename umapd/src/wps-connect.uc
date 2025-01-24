@@ -11,7 +11,7 @@ import * as struct from 'struct';
 
 const WPA_SOCKET_PATH = '/var/run/wps';
 
-const WPA_PROTOS = [ 'OSEN', 'RSN', 'WPA', 'WPA2' ];
+const WPA_PROTOS = ['OSEN', 'RSN', 'WPA', 'WPA2'];
 
 const WPA_KEY_MGMT_SUITES = [
 	'None',
@@ -35,8 +35,7 @@ const WPA_CIPHERS = [
 	'TKIP',
 ];
 
-function matches(str, offset, choices, ...delims)
-{
+function matches(str, offset, choices, ...delims) {
 	for (let choice in choices) {
 		let s = substr(str, offset, length(choice));
 		let d = chr(ord(str, offset + length(choice)));
@@ -46,8 +45,7 @@ function matches(str, offset, choices, ...delims)
 	}
 }
 
-function parse_encryption(flags)
-{
+function parse_encryption(flags) {
 	for (let spec in match(flags, /\[[^\]]+\]/g)) {
 		let proto, suite, cipher, suites = [], ciphers = [], offset = 1;
 
@@ -76,61 +74,60 @@ function parse_encryption(flags)
 	}
 }
 
-function parse_credentials(creds)
-{
+function parse_credentials(creds) {
 	let msg = struct.buffer(hexdec(creds));
 	let result = { auth: [], encr: [] };
 	let t, l;
 
 	while ((t = msg.get('!H')) > 0 && (l = msg.get('!H')) > 0) {
 		switch (t) {
-		case 0x100e: /* Credentials */
-			/* don't read value, continue parsing nested TLVs */
-			break;
+			case 0x100e: /* Credentials */
+				/* don't read value, continue parsing nested TLVs */
+				break;
 
-		case 0x1045: /* SSID */
-			if (l > 32) return null;
+			case 0x1045: /* SSID */
+				if (l > 32) return null;
 
-			result.ssid = msg.get(l);
-			break;
+				result.ssid = msg.get(l);
+				break;
 
-		case 0x1003: /* Authentication Type */
-			if (l != 2)	return null;
+			case 0x1003: /* Authentication Type */
+				if (l != 2) return null;
 
-			let auth = msg.get('!H');
-			if (auth & 0x0001) push(result.auth, 'open');
-			if (auth & 0x0002) push(result.auth, 'psk');
-			if (auth & 0x0004) push(result.auth, 'wep');
-			if (auth & 0x0008) push(result.auth, 'wpa');
-			if (auth & 0x0010) push(result.auth, 'wpa2');
-			if (auth & 0x0020) push(result.auth, 'psk2');
-			break;
+				let auth = msg.get('!H');
+				if (auth & 0x0001) push(result.auth, 'open');
+				if (auth & 0x0002) push(result.auth, 'psk');
+				if (auth & 0x0004) push(result.auth, 'wep');
+				if (auth & 0x0008) push(result.auth, 'wpa');
+				if (auth & 0x0010) push(result.auth, 'wpa2');
+				if (auth & 0x0020) push(result.auth, 'psk2');
+				break;
 
-		case 0x100f: /* Encryption Type */
-			if (l != 2) return null;
+			case 0x100f: /* Encryption Type */
+				if (l != 2) return null;
 
-			let encr = msg.get('!H');
-			if (encr & 0x0001) push(result.encr, 'none');
-			if (encr & 0x0002) push(result.encr, 'wep');
-			if (encr & 0x0004) push(result.encr, 'tkip');
-			if (encr & 0x0008) push(result.encr, 'aes');
-			break;
+				let encr = msg.get('!H');
+				if (encr & 0x0001) push(result.encr, 'none');
+				if (encr & 0x0002) push(result.encr, 'wep');
+				if (encr & 0x0004) push(result.encr, 'tkip');
+				if (encr & 0x0008) push(result.encr, 'aes');
+				break;
 
-		case 0x1027: /* Network Key */
-			if (l > 64) return null;
+			case 0x1027: /* Network Key */
+				if (l > 64) return null;
 
-			result.key = msg.get(l);
-			break;
+				result.key = msg.get(l);
+				break;
 
-		case 0x1020: /* BSSID */
-			if (l != 6) return null;
+			case 0x1020: /* BSSID */
+				if (l != 6) return null;
 
-			result.bssid = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...msg.read('6B'));
-			break;
+				result.bssid = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...msg.read('6B'));
+				break;
 
-		default:
-			msg.pos(msg.pos() + l); /* skip over other attributes */
-			break;
+			default:
+				msg.pos(msg.pos() + l); /* skip over other attributes */
+				break;
 		}
 	}
 
@@ -262,8 +259,8 @@ function perform_wps(args) {
 		supplicant_sock.bind('/var/run/wps/client');
 
 		if ((reply = supplicant_request(supplicant_sock, 'ATTACH')) != 'OK' ||
-		    (reply = supplicant_request(supplicant_sock, 'SET pmf 1')) != 'OK' ||
-		    (reply = supplicant_request(supplicant_sock, 'SET wps_cred_processing 1')) != 'OK')
+			(reply = supplicant_request(supplicant_sock, 'SET pmf 1')) != 'OK' ||
+			(reply = supplicant_request(supplicant_sock, 'SET wps_cred_processing 1')) != 'OK')
 			die(`Error initializing wpa_supplicant (${reply})`);
 
 		printf("Supplicant initialized\n");
@@ -274,7 +271,7 @@ function perform_wps(args) {
 
 		let wps_reply = supplicant_waitfor(supplicant_sock, /^<3>WPS-CRED-RECEIVED ([0-9a-fA-F]+)$/, 90000);
 		if (wps_reply == null)
-			die ("WPS association failed");
+			die("WPS association failed");
 
 		let wps_creds = parse_credentials(wps_reply[1]);
 		if (!('ssid' in wps_creds) || !length(wps_creds.auth) || !length(wps_creds.encr))
@@ -367,7 +364,7 @@ function perform_wps(args) {
 }
 
 
-const args = sys.getopt([ 'radio=s', 'phy=s', 'config=s', 'multi-ap', 'help' ]);
+const args = sys.getopt(['radio=s', 'phy=s', 'config=s', 'multi-ap', 'help']);
 
 if ('help' in args) {
 	print(

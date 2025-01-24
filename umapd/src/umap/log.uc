@@ -16,7 +16,7 @@
 
 export default {
 	debug: (fmt, ...args) => warn(sprintf(`[D] ${fmt}\n`, ...args)),
-	warn:  (fmt, ...args) => warn(sprintf(`[W] ${fmt}\n`, ...args)),
+	warn: (fmt, ...args) => warn(sprintf(`[W] ${fmt}\n`, ...args)),
 	error: (fmt, ...args) => warn(sprintf(`[E] ${fmt}\n`, ...args)),
-	info:  (fmt, ...args) => warn(sprintf(`[I] ${fmt}\n`, ...args))
+	info: (fmt, ...args) => warn(sprintf(`[I] ${fmt}\n`, ...args))
 };

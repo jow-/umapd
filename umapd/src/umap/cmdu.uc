@@ -33,7 +33,7 @@ const TLV_MAX_PAYLOAD_LENGTH = CMDU_MAX_PAYLOAD_LENGTH - TLV_HEADER_LENGTH /* TL
 const CMDU_MESSAGE_VERSION = 0;
 
 const CMDU_F_LASTFRAG = 0b10000000;
-const CMDU_F_ISRELAY  = 0b01000000;
+const CMDU_F_ISRELAY = 0b01000000;
 
 const CMDU_MAX_CONCURRENT_REASSEMBLY = 16;
 const CMDU_MAX_PAYLOAD_SIZE = 102400;
@@ -117,7 +117,7 @@ function tlv_name(type) {
 export default {
 	mid_counter: 0,
 
-	create: function(type, mid) {
+	create: function (type, mid) {
 		return proto({
 			type,
 			mid: mid ?? (++this.mid_counter % 65536),
@@ -126,7 +126,7 @@ export default {
 		}, this);
 	},
 
-	parse: function(srcmac, payload) {
+	parse: function (srcmac, payload) {
 		// ensure minimum length
 		if (length(payload) < IEEE1905_HEADER_LENGTH + TLV_HEADER_LENGTH) {
 			log.debug('CMDU packet too short');
@@ -209,7 +209,7 @@ export default {
 			// return on yet missing fragments (fragments were received out of order)
 			for (let i = 0; i < length(msg.fragments); i++) {
 				if (msg.fragments[fid] == null) {
-					log.debug(`CMDU ${srcmac}#${mid}: Fragments received out of order, fragment ${i+1} of ${length(msg.fragments)} missing`);
+					log.debug(`CMDU ${srcmac}#${mid}: Fragments received out of order, fragment ${i + 1} of ${length(msg.fragments)} missing`);
 					return msg;
 				}
 			}
@@ -244,11 +244,11 @@ export default {
 		return msg;
 	},
 
-	is_complete: function() {
+	is_complete: function () {
 		return !this.fragments;
 	},
 
-	ensure_eom: function() {
+	ensure_eom: function () {
 		if (this.tlvs[-3] !== defs.TLV_END_OF_MESSAGE) {
 			const offset = this.tlvs[-1] ?? IEEE1905_HEADER_LENGTH;
 
@@ -257,7 +257,7 @@ export default {
 		}
 	},
 
-	add_tlv: function(type, ...args) {
+	add_tlv: function (type, ...args) {
 		let append_eom = false;
 		let success = true;
 		let offset;
@@ -309,7 +309,7 @@ export default {
 		return success;
 	},
 
-	add_tlv_raw: function(type, payload) {
+	add_tlv_raw: function (type, payload) {
 		let append_eom = false;
 		let offset;
 
@@ -329,24 +329,24 @@ export default {
 			this.ensure_eom();
 	},
 
-	get_tlv: function(type) {
+	get_tlv: function (type) {
 		for (let i = 0; this.tlvs[i] !== null; i += 3)
 			if (this.tlvs[i] === type)
-				return decode_tlv(this, this.tlvs[i], this.tlvs[i+1], this.tlvs[i+2])?.data;
+				return decode_tlv(this, this.tlvs[i], this.tlvs[i + 1], this.tlvs[i + 2])?.data;
 	},
 
-	get_tlv_raw: function(type) {
+	get_tlv_raw: function (type) {
 		for (let i = 0; this.tlvs[i] !== null; i += 3)
 			if (this.tlvs[i] === type)
-				return this.buf.slice(this.tlvs[i+1], this.tlvs[i+2]);
+				return this.buf.slice(this.tlvs[i + 1], this.tlvs[i + 2]);
 	},
 
-	get_tlvs: function(...types) {
+	get_tlvs: function (...types) {
 		const rv = [];
 
 		for (let i = 0; this.tlvs[i] !== null; i += 3) {
 			if (!length(types) || this.tlvs[i] in types) {
-				const tlv = decode_tlv(this, this.tlvs[i], this.tlvs[i+1], this.tlvs[i+2])?.data;
+				const tlv = decode_tlv(this, this.tlvs[i], this.tlvs[i + 1], this.tlvs[i + 2])?.data;
 				if (tlv != null)
 					push(rv, tlv);
 			}
@@ -355,14 +355,14 @@ export default {
 		return rv;
 	},
 
-	get_tlvs_raw: function(...types) {
+	get_tlvs_raw: function (...types) {
 		const rv = [];
 
 		for (let i = 0; this.tlvs[i] !== null; i += 3) {
 			if (!length(types) || this.tlvs[i] in types) {
 				push(rv, {
 					type: this.tlvs[i],
-					payload: this.buf.slice(this.tlvs[i+1], this.tlvs[i+2])
+					payload: this.buf.slice(this.tlvs[i + 1], this.tlvs[i + 2])
 				});
 			}
 		}
@@ -370,7 +370,7 @@ export default {
 		return rv;
 	},
 
-	has_tlv: function(...types) {
+	has_tlv: function (...types) {
 		let count = 0;
 
 		for (let i = 0; this.tlvs[i] !== null; i += 3)
@@ -380,7 +380,7 @@ export default {
 		return count;
 	},
 
-	send: function(socket, src, dest, flags) {
+	send: function (socket, src, dest, flags) {
 		let payload_data = [];
 		let payload_fmt = [];
 		let size = 0;
@@ -400,7 +400,7 @@ export default {
 				log.debug('  TLV %02x (%s) - %d byte',
 					this.tlvs[i],
 					tlv_name(this.tlvs[i]) ?? 'Unknown TLV',
-					this.tlvs[i+2] - this.tlvs[i+1]);
+					this.tlvs[i + 2] - this.tlvs[i + 1]);
 			}
 		}
 
@@ -417,12 +417,12 @@ export default {
 			let payload_len = 0;
 
 			for (let i = 0; this.tlvs[i] !== null; i += 3) {
-				let tlv_len = this.tlvs[i+2] - this.tlvs[i+1];
+				let tlv_len = this.tlvs[i + 2] - this.tlvs[i + 1];
 
 				if (payload_len + tlv_len > IEEE1905_MAX_PAYLOAD_LENGTH) {
 					let fragment = alloc_fragment(this.type, this.mid, fid++, flags ?? 0);
 
-					fragment.put('*', this.buf.slice(this.tlvs[i+1] - payload_len, this.tlvs[i+1]));
+					fragment.put('*', this.buf.slice(this.tlvs[i + 1] - payload_len, this.tlvs[i + 1]));
 					socket.send(src, dest, fragment.pull());
 
 					payload_len = 0;

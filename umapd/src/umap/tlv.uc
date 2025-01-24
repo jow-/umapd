@@ -35,63 +35,63 @@ function encode_local_interface(i1905lif) {
 		let role = 0, chanbw = 0, chan1 = 0, chan2 = 0;
 
 		switch (info.wifi.interface.iftype ?? 0) {
-		case 1: /* Ad-Hoc */
-		case 2: /* Station */
-		case 5: /* WDS */
-		case 6: /* Monitor */
-		case 7: /* Mesh Point */
-		case 10: /* P2P Device */
-		case 11: /* OCB */
-		case 12: /* NAN */
-			role = 0b01000000;
-			break;
+			case 1: /* Ad-Hoc */
+			case 2: /* Station */
+			case 5: /* WDS */
+			case 6: /* Monitor */
+			case 7: /* Mesh Point */
+			case 10: /* P2P Device */
+			case 11: /* OCB */
+			case 12: /* NAN */
+				role = 0b01000000;
+				break;
 
-		case 3: /* AP */
-		case 4: /* AP VLAN */
-			role = 0b00000000;
-			break;
+			case 3: /* AP */
+			case 4: /* AP VLAN */
+				role = 0b00000000;
+				break;
 
-		case 8: /* P2P Client */
-			role = 0b10000000;
-			break;
+			case 8: /* P2P Client */
+				role = 0b10000000;
+				break;
 
-		case 9: /* P2P Go */
-			role = 0b10010000;
-			break;
+			case 9: /* P2P Go */
+				role = 0b10010000;
+				break;
 
-		default: /* unspecified/unknown */
-			role = 0b01000000;
-			break;
+			default: /* unspecified/unknown */
+				role = 0b01000000;
+				break;
 		}
 
 		switch (info.wifi.interface.channel_width ?? 0) {
-		case 0: /* 20MHz NOHT */
-		case 1: /* 20MHz */
-		case 2: /* 40Mhz */
-			chanbw = 0;
-			break;
+			case 0: /* 20MHz NOHT */
+			case 1: /* 20MHz */
+			case 2: /* 40Mhz */
+				chanbw = 0;
+				break;
 
-		case 3: /* 80MHz */
-			chanbw = 1;
-			break;
+			case 3: /* 80MHz */
+				chanbw = 1;
+				break;
 
-		case 4: /* 80+80MHz */
-			chanbw = 3;
-			break;
+			case 4: /* 80+80MHz */
+				chanbw = 3;
+				break;
 
-		case 5: /* 160MHz */
-			chanbw = 2;
-			break;
+			case 5: /* 160MHz */
+				chanbw = 2;
+				break;
 
-		case 6: /* 5MHz */
-		case 7: /* 10MHz */
-		case 8: /* 1MHz */
-		case 9: /* 2MHz */
-		case 10: /* 4MHz */
-		case 11: /* 8MHz */
-		case 12: /* 16MHz */
-			chanbw = 0;
-			break;
+			case 6: /* 5MHz */
+			case 7: /* 10MHz */
+			case 8: /* 1MHz */
+			case 9: /* 2MHz */
+			case 10: /* 4MHz */
+			case 11: /* 8MHz */
+			case 12: /* 16MHz */
+				chanbw = 0;
+				break;
 		}
 
 		for (let band in info.wifi.phy.wiphy_bands) {
@@ -269,30 +269,30 @@ const TLVDecoder = [
 			off = 1;
 
 		switch (neigh) {
-		case 0x00:
-			break;
+			case 0x00:
+				break;
 
-		case 0x01:
-			mac = utils.ether_ntoa(payload, off);
-			off += 6;
-			break;
+			case 0x01:
+				mac = utils.ether_ntoa(payload, off);
+				off += 6;
+				break;
 
-		default:
-			return null;
+			default:
+				return null;
 		}
 
 		switch (ord(payload, off)) {
-		case 0x00:
-			return { mac, tx: true, rx: false };
+			case 0x00:
+				return { mac, tx: true, rx: false };
 
-		case 0x01:
-			return { mac, tx: false, rx: true };
+			case 0x01:
+				return { mac, tx: false, rx: true };
 
-		case 0x02:
-			return { mac, tx: true, rx: true };
+			case 0x02:
+				return { mac, tx: true, rx: true };
 
-		default:
-			return null;
+			default:
+				return null;
 		}
 	},
 
@@ -1062,7 +1062,7 @@ const TLVEncoder = [
 			return null;
 
 		let fmt = '!6sB';
-		let val = [ hexdec(al_address, ':'), 0 ];
+		let val = [hexdec(al_address, ':'), 0];
 
 		for (let i1905lif in links) {
 			val[1]++;
@@ -1079,7 +1079,7 @@ const TLVEncoder = [
 			return null;
 
 		let fmt = '!B',
-			val = [ length(tuples) ];
+			val = [length(tuples)];
 
 		for (let tuple in tuples) {
 			if (length(tuple) == 0)
@@ -1106,7 +1106,7 @@ const TLVEncoder = [
 	// 0x06 - Non-1905 neighbor device list TLV
 	(local_address, remote_addresses) => {
 		let fmt = '!6s',
-			val = [ hexdec(local_address, ':') ];
+			val = [hexdec(local_address, ':')];
 
 		for (let addr in remote_addresses) {
 			fmt += '6s';
@@ -1119,7 +1119,7 @@ const TLVEncoder = [
 	// 0x07 - 1905.1 neighbor device TLV
 	(local_address, links) => {
 		let fmt = '!6s',
-			val = [ hexdec(local_address, ':') ];
+			val = [hexdec(local_address, ':')];
 
 		for (let i1905rif in links) {
 			fmt += '6sB';
@@ -1152,12 +1152,12 @@ const TLVEncoder = [
 	// 0x09 - Transmitter link metric TLV
 	(al_address, neighbor_al_address, links) => {
 		let fmt = '!6s6s',
-			val = [ hexdec(al_address, ':'), hexdec(neighbor_al_address, ':') ];
+			val = [hexdec(al_address, ':'), hexdec(neighbor_al_address, ':')];
 
 		for (let i = 0; i < length(links); i += 2) {
 			let i1905lif = links[i + 0],
-			    i1905rif = links[i + 1],
-			    metrics = i1905lif.getLinkMetrics(i1905rif.address);
+				i1905rif = links[i + 1],
+				metrics = i1905lif.getLinkMetrics(i1905rif.address);
 
 			fmt += '6s6sHBIIHHH';
 			push(val,
@@ -1179,12 +1179,12 @@ const TLVEncoder = [
 	// 0x0a - Receiver link metric TLV
 	(al_address, neighbor_al_address, links) => {
 		let fmt = '!6s6s',
-		    val = [ hexdec(al_address, ':'), hexdec(neighbor_al_address, ':') ];
+			val = [hexdec(al_address, ':'), hexdec(neighbor_al_address, ':')];
 
 		for (let i = 0; i < length(links); i += 2) {
 			let i1905lif = links[i + 0],
-			    i1905rif = links[i + 1],
-			    metrics = i1905lif.getLinkMetrics(i1905rif.address);
+				i1905rif = links[i + 1],
+				metrics = i1905lif.getLinkMetrics(i1905rif.address);
 
 			fmt += '6s6sHIIB';
 			push(val,
@@ -1246,13 +1246,13 @@ const TLVEncoder = [
 				let kv = match(line, '^([^=]+)="(.+)"\n?$');
 
 				switch (kv?.[0]) {
-				case 'OPENWRT_DEVICE_MANUFACTURER':
-					manufacturer_name ??= kv[1];
-					break;
+					case 'OPENWRT_DEVICE_MANUFACTURER':
+						manufacturer_name ??= kv[1];
+						break;
 
-				case 'OPENWRT_DEVICE_PRODUCT':
-					manufacturer_model ??= kv[1];
-					break;
+					case 'OPENWRT_DEVICE_PRODUCT':
+						manufacturer_model ??= kv[1];
+						break;
 				}
 			}
 
@@ -1277,7 +1277,7 @@ const TLVEncoder = [
 		assert(length(links) <= 255, 'Too many interfaces for TLV');
 
 		let fmt = '!B';
-		let val = [ 0 ];
+		let val = [0];
 
 		for (let i1905lif in links) {
 			let ipaddrs = i1905lif.getIPAddrs(ifstatus);
@@ -1306,7 +1306,7 @@ const TLVEncoder = [
 		assert(length(links) <= 255, 'Too many interfaces for TLV');
 
 		let fmt = '!B';
-		let val = [ 0 ];
+		let val = [0];
 
 		for (let i1905lif in links) {
 			let ip6addrs = i1905lif.getIP6Addrs(ifstatus);
@@ -1467,7 +1467,7 @@ const TLVEncoder = [
 ];
 
 export default {
-	create: function(type, payload) {
+	create: function (type, payload) {
 		if (type < 0 || type > 0xff || length(payload) > 0xffff)
 			return null;
 
@@ -1478,7 +1478,7 @@ export default {
 		}, this);
 	},
 
-	parse: function(buf) {
+	parse: function (buf) {
 		let tlv_type = buf.get('B');
 		let tlv_len = buf.get('!H');
 
@@ -1492,7 +1492,7 @@ export default {
 		}, this);
 	},
 
-	decode: function(type, payload) {
+	decode: function (type, payload) {
 		type ??= this.type;
 		payload ??= this.payload;
 
@@ -1502,7 +1502,7 @@ export default {
 		return decoder[type]?.(payload);
 	},
 
-	encode: function(type, ...args) {
+	encode: function (type, ...args) {
 		let buf = buffer();
 
 		if (type === defs.TLV_EXTENDED) {

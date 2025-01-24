@@ -32,11 +32,11 @@ function failure(msg) {
 export default {
 	const: {
 		ETH_P_8021Q: 0x8100,
-		ETH_P_LLDP:  0x88cc,
-		ETH_P_1905:  0x893a,
+		ETH_P_LLDP: 0x88cc,
+		ETH_P_1905: 0x893a,
 	},
 
-	error: function() {
+	error: function () {
 		let msg = err;
 
 		err = null;
@@ -44,7 +44,7 @@ export default {
 		return msg;
 	},
 
-	create: function(ifname, ethproto, vlan) {
+	create: function (ifname, ethproto, vlan) {
 		let upper = ifname;
 		let address, bridge;
 
@@ -57,13 +57,13 @@ export default {
 			address ??= link.address;
 
 			switch (link.linkinfo?.type) {
-			case 'vlan':
-				upper = link.link;
-				continue;
+				case 'vlan':
+					upper = link.link;
+					continue;
 
-			case 'bridge':
-				bridge = upper;
-				break;
+				case 'bridge':
+					bridge = upper;
+					break;
 			}
 
 			break;
@@ -82,10 +82,10 @@ export default {
 		}, this);
 	},
 
-	send: function(src, dest, data) {
+	send: function (src, dest, data) {
 		let smac = hexdec(src ?? this.address, ':'),
-		    dmac = hexdec(dest, ':'),
-		    frame;
+			dmac = hexdec(dest, ':'),
+			frame;
 
 		if (this.vlan)
 			frame = pack('!6s6sHHH*', dmac, smac, this.const.ETH_P_8021Q, this.vlan, this.protocol, data);
@@ -95,7 +95,7 @@ export default {
 		return this.socket.send(dest, frame);
 	},
 
-	recv: function() {
+	recv: function () {
 		let frame = this.socket.recv();
 
 		if (!frame)
@@ -150,11 +150,11 @@ export default {
 		];
 	},
 
-	close: function() {
+	close: function () {
 		return this.socket.close();
 	},
 
-	fileno: function() {
+	fileno: function () {
 		return this.socket.fileno();
 	}
 };

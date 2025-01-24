@@ -19,7 +19,7 @@ import { unpack } from 'struct';
 import defs from 'umap.defs';
 
 const Queue = {
-	push: function(item) {
+	push: function (item) {
 		if (item == null || item in this.q)
 			return item;
 
@@ -31,13 +31,13 @@ const Queue = {
 		return item;
 	},
 
-	find: function(f) {
+	find: function (f) {
 		for (let e in this.q)
 			if (f?.(e))
 				return e;
 	},
 
-	shift: function() {
+	shift: function () {
 		let item = shift(this.q);
 
 		if (item) {
@@ -46,7 +46,7 @@ const Queue = {
 		}
 	},
 
-	pop: function() {
+	pop: function () {
 		let item = pop(this.q);
 
 		if (item) {
@@ -55,7 +55,7 @@ const Queue = {
 		}
 	},
 
-	remove: function(item) {
+	remove: function (item) {
 		for (let i, e in this.q) {
 			if (e === item) {
 				splice(this.q, i, 1);
@@ -65,13 +65,13 @@ const Queue = {
 		}
 	},
 
-	contains: function(item) {
+	contains: function (item) {
 		return (item in this.q);
 	},
 };
 
 const AgingDict = {
-	gc: function(except_key, now) {
+	gc: function (except_key, now) {
 		for (let k, v in this.d) {
 			if (k != except_key && now - v[0] > this.maxAge) {
 				this.onRemove?.(k, v[1]);
@@ -80,20 +80,20 @@ const AgingDict = {
 		}
 	},
 
-	set: function(key, val) {
+	set: function (key, val) {
 		let now = time();
 
 		this.gc(key, now);
 
 		if (exists(this.d, key))
-			this.d[key] = [ now, val ];
+			this.d[key] = [now, val];
 		else
 			this.d[key][0] = now;
 
 		return val;
 	},
 
-	touch: function(key) {
+	touch: function (key) {
 		if (exists(this.d, key)) {
 			this.d[key][0] = time();
 			return this.d[key][1];
@@ -102,7 +102,7 @@ const AgingDict = {
 		return null;
 	},
 
-	unset: function(key) {
+	unset: function (key) {
 		let val = null;
 
 		this.gc(key, time());
@@ -116,15 +116,15 @@ const AgingDict = {
 		return val;
 	},
 
-	get: function(key) {
+	get: function (key) {
 		return this.d[key]?.[1];
 	},
 
-	has: function(key) {
+	has: function (key) {
 		return exists(this.d, key);
 	},
 
-	values: function() {
+	values: function () {
 		let rv = [];
 
 		for (let k, v in this.d)
@@ -147,16 +147,16 @@ export default {
 		d: {}
 	}, AgingDict),
 
-	ether_ntoa: function(v, off) {
+	ether_ntoa: function (v, off) {
 		let mac = unpack('6B', v, off);
 		return mac ? sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...mac) : null;
 	},
 
-	ether_aton: function(mac) {
+	ether_aton: function (mac) {
 		return hexdec(mac, ':');
 	},
 
-	ether_increment: function(mac, increment) {
+	ether_increment: function (mac, increment) {
 		if (increment === 0)
 			return mac;
 
@@ -174,28 +174,28 @@ export default {
 		return sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...bytes);
 	},
 
-	lookup_enum: function(v, d) {
+	lookup_enum: function (v, d) {
 		for (let k in d)
 			if (d[k] == v)
 				return k;
 	},
 
-	uuid_ntoa: function(uuid) {
+	uuid_ntoa: function (uuid) {
 		let bytes = (type(uuid) == 'array') ? uuid : unpack('16B', uuid);
 		return bytes ? sprintf('%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x', ...bytes) : 0;
 	},
 
-	uuid_aton: function(uuid) {
+	uuid_aton: function (uuid) {
 		return hexdec(uuid, '-');
 	},
 
-	cmdu_type_ntoa: function(cmdu_type) {
+	cmdu_type_ntoa: function (cmdu_type) {
 		for (let k, v in defs)
 			if (v === cmdu_type && index(k, 'MSG_') === 0)
 				return substr(k, 4);
 	},
 
-	tlv_type_ntoa: function(tlv_type) {
+	tlv_type_ntoa: function (tlv_type) {
 		for (let k, v in defs)
 			if (v === tlv_type && index(k, 'TLV_') === 0)
 				return substr(k, 4);
