@@ -2,7 +2,6 @@ import { pack, unpack, buffer } from 'struct';
 import { readfile } from 'fs';
 import log from 'log';
 import { sha256, hmac_sha256, aes_encrypt, aes_decrypt, dh_keypair, dh_sharedkey } from 'umap.crypto';
-import wireless from 'umap.wireless';
 
 import model from 'umap.model';
 import utils from 'umap.utils';
@@ -49,9 +48,7 @@ const ATTR_CONFIG_ERROR = 0x1009;
 const WPS_CFG_NO_ERROR = 0;
 const ATTR_OS_VERSION = 0x102d;
 const ATTR_VENDOR_EXTENSION = 0x1049;
-const WPS_VENDOR_ID_WFA_1 = 0x00;
-const WPS_VENDOR_ID_WFA_2 = 0x37;
-const WPS_VENDOR_ID_WFA_3 = 0x2A;
+const WPS_VENDOR_ID_WFA = "\x00\x37\x2A";
 const WFA_ELEM_VERSION2 = 0x00;
 const WFA_ELEM_MULTI_AP = 0x06;
 const WPS_VERSION = 0x20;
@@ -78,15 +75,14 @@ function build_plain_settings(desiredConfiguration)
 	desiredConfiguration.multi_ap.profile1_backhaul_sta_assoc_dissallowed ??= false;
 	desiredConfiguration.multi_ap.profile2_backhaul_sta_assoc_dissallowed ??= false;
 
-    buf.put("!HHBBBBBB", ATTR_VENDOR_EXTENSION, 6,
-            WPS_VENDOR_ID_WFA_1, WPS_VENDOR_ID_WFA_2, WPS_VENDOR_ID_WFA_3,
-            WFA_ELEM_MULTI_AP, 1, 0
-            	| (desiredConfiguration.multi_ap.is_backhaul_sta << 0)
-            	| (desiredConfiguration.multi_ap.is_backhaul_bss << 1)
-            	| (desiredConfiguration.multi_ap.is_fronthaul_bss << 2)
-            	| (desiredConfiguration.multi_ap.tear_down << 3)
-            	| (desiredConfiguration.multi_ap.profile1_backhaul_sta_assoc_dissallowed << 4)
-            	| (desiredConfiguration.multi_ap.profile2_backhaul_sta_assoc_dissallowed << 5)
+    buf.put("!HH3sBBB", ATTR_VENDOR_EXTENSION, 6, WPS_VENDOR_ID_WFA,
+		WFA_ELEM_MULTI_AP, 1, 0
+			| (desiredConfiguration.multi_ap.is_backhaul_sta << 0)
+			| (desiredConfiguration.multi_ap.is_backhaul_bss << 1)
+			| (desiredConfiguration.multi_ap.is_fronthaul_bss << 2)
+			| (desiredConfiguration.multi_ap.tear_down << 3)
+			| (desiredConfiguration.multi_ap.profile1_backhaul_sta_assoc_dissallowed << 4)
+			| (desiredConfiguration.multi_ap.profile2_backhaul_sta_assoc_dissallowed << 5)
     );
 
     return buf.pull();
@@ -168,14 +164,14 @@ export function wscBuildM1(radio)
 
 	buf.put("!HH*", ATTR_DEV_NAME, length(id?.friendly_name), id?.friendly_name ?? '');
 
-	buf.put("!HHB", ATTR_RF_BANDS, 1, radio.inferWSCRFBands());
+	//buf.put("!HHB", ATTR_RF_BANDS, 1, radio.inferWSCRFBands());
+	buf.put("!HHB", ATTR_RF_BANDS, 1, radio.band);
 
 	buf.put("!HHH", ATTR_ASSOC_STATE, 2, WPS_ASSOC_NOT_ASSOC);
 	buf.put("!HHH", ATTR_DEV_PASSWORD_ID, 2, DEV_PW_PUSHBUTTON);
 	buf.put("!HHH", ATTR_CONFIG_ERROR, 2, WPS_CFG_NO_ERROR);
 	buf.put("!HHI", ATTR_OS_VERSION, 4, 0x80000001);
-	buf.put("!HHBBBBBB", ATTR_VENDOR_EXTENSION, 6,
-		WPS_VENDOR_ID_WFA_1, WPS_VENDOR_ID_WFA_2, WPS_VENDOR_ID_WFA_3,
+	buf.put("!HH3sBBB", ATTR_VENDOR_EXTENSION, 6, WPS_VENDOR_ID_WFA,
 		WFA_ELEM_VERSION2, 1, WPS_VERSION);
 
 	last_m1 = buf.pull();
@@ -295,9 +291,8 @@ export function wscBuildM2(m1, desiredConfiguration)
     buf.put("!HHH", ATTR_DEV_PASSWORD_ID, 2, DEV_PW_PUSHBUTTON);
     buf.put("!HHI", ATTR_OS_VERSION, 4, 0x80000001);
 
-    buf.put("!HHBBBBBB", ATTR_VENDOR_EXTENSION, 6,
-            WPS_VENDOR_ID_WFA_1, WPS_VENDOR_ID_WFA_2, WPS_VENDOR_ID_WFA_3,
-            WFA_ELEM_VERSION2, 1, WPS_VERSION);
+    buf.put("!HH3sBBB", ATTR_VENDOR_EXTENSION, 6, WPS_VENDOR_ID_WFA,
+		WFA_ELEM_VERSION2, 1, WPS_VERSION);
 
     let shared_secret = dh_sharedkey(local_privkey, m1_pubkey);
     let dhkey = sha256(shared_secret);
@@ -378,18 +373,6 @@ export function wscProcessM2(key, m1, m2)
             settings.device_name = msg.get(attr_len);
 		else if (attr_type == ATTR_RF_BANDS && attr_len == 1)
 			settings.bands = msg.get('B');
-		else if (attr_type == WFA_ELEM_MULTI_AP && attr_len == 1) {
-			const multi_ap_flags = msg.get('B');
-
-			settings.multi_ap = {
-				is_backhaul_sta: !!(multi_ap_flags & 0x1),
-				is_backhaul_bss: !!(multi_ap_flags & 0x2),
-				is_fronthaul_bss:  !!(multi_ap_flags & 0x4),
-				tear_down: !!(multi_ap_flags & 0x8),
-				profile1_backhaul_sta_assoc_dissallowed: !!(multi_ap_flags & 0x10),
-				profile2_backhaul_sta_assoc_dissallowed: !!(multi_ap_flags & 0x20)
-			};
-		}
 		else
 			msg.pos(msg.pos() + attr_len);
     }
@@ -437,6 +420,27 @@ export function wscProcessM2(key, m1, m2)
 			settings.network_key = msg.get(attr_len);
         else if (attr_type == ATTR_MAC_ADDR && attr_len == 6)
 			settings.bssid = utils.ether_ntoa(msg.get(6));
+		else if (attr_type == ATTR_VENDOR_EXTENSION && attr_len >= 5) {
+			const oui = msg.get('3s');
+			const subattr_type = msg.get('B');
+			const subattr_len = msg.get('B');
+
+			if (oui == WPS_VENDOR_ID_WFA && subattr_type == WFA_ELEM_MULTI_AP && subattr_len == 1) {
+				const multi_ap_flags = msg.get('B');
+
+				settings.multi_ap = {
+					is_backhaul_sta: !!(multi_ap_flags & 0x1),
+					is_backhaul_bss: !!(multi_ap_flags & 0x2),
+					is_fronthaul_bss:  !!(multi_ap_flags & 0x4),
+					tear_down: !!(multi_ap_flags & 0x8),
+					profile1_backhaul_sta_assoc_dissallowed: !!(multi_ap_flags & 0x10),
+					profile2_backhaul_sta_assoc_dissallowed: !!(multi_ap_flags & 0x20)
+				};
+			}
+			else {
+				msg.pos(msg.pos() + attr_len - 5);
+			}
+		}
 		else
 			msg.pos(msg.pos() + attr_len);
 	}

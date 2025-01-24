@@ -346,7 +346,7 @@ export default {
 
 		for (let i = 0; this.tlvs[i] !== null; i += 3) {
 			if (!length(types) || this.tlvs[i] in types) {
-				const tlv = decode_tlv(this, this.tlvs[i], this.tlvs[i+1], this.tlvs[i+2]);
+				const tlv = decode_tlv(this, this.tlvs[i], this.tlvs[i+1], this.tlvs[i+2])?.data;
 				if (tlv != null)
 					push(rv, tlv);
 			}

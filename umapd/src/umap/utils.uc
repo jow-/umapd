@@ -156,6 +156,24 @@ export default {
 		return hexdec(mac, ':');
 	},
 
+	ether_increment: function(mac, increment) {
+		if (increment === 0)
+			return mac;
+
+		const bytes = unpack('6B', hexdec(mac, ':'));
+		let carry = increment ?? 1;
+
+		for (let i = 5; i >= 0; i--) {
+			bytes[i] += carry;
+			carry = bytes[i] / 256;
+			bytes[i] %= 256;
+		}
+
+		bytes[0] |= 0x02;
+
+		return sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...bytes);
+	},
+
 	lookup_enum: function(v, d) {
 		for (let k in d)
 			if (d[k] == v)

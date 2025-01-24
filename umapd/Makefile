@@ -43,10 +43,11 @@ define Package/umapd/install
 			$(addprefix $(PKG_BUILD_DIR)/,$(file)) \
 			$(1)/usr/share/ucode/$(dir $(file)); )
 
-	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/init.d $(1)/etc/config
+	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/init.d $(1)/etc/config $(1)/usr/libexec/umap
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/umap.uc $(1)/usr/sbin/umapd
 	$(INSTALL_BIN) ./files/umapd.init $(1)/etc/init.d/umapd
 	$(INSTALL_CONF) ./files/umapd.config $(1)/etc/config/umapd
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wifi-apply.uc $(1)/usr/libexec/umap/wifi-apply
 endef
 
 $(eval $(call BuildPackage,umapd))

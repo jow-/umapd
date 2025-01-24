@@ -16,13 +16,15 @@
 
 import * as uloop from 'uloop';
 
+import utils from 'umap.utils';
 import model from 'umap.model';
 import cmdu from 'umap.cmdu';
 import defs from 'umap.defs';
 import log from 'umap.log';
 
 import * as wsc from 'umap.wsc';
-import wireless from 'umap.wireless';
+import * as wconst from 'umap.wireless';
+import configuration from 'umap.configuration';
 
 
 const MAX_RETRIES = 5;
@@ -38,27 +40,27 @@ const IAgentSession = {
 	m1: null,
 	m2: null,
 
-	isTimerExpired: function(timeoutSeconds) {
-	    return (time() - this.lastActionTime) > timeoutSeconds;
+	isTimerExpired: function (timeoutSeconds) {
+		return (time() - this.lastActionTime) > timeoutSeconds;
 	},
 
-	debug: function(msg) {
+	debug: function (msg) {
 		log.debug(`autoconf: radio ${this.radio.address}: ${msg}`);
 	},
 
-	info: function(msg) {
+	info: function (msg) {
 		log.info(`autoconf: radio ${this.radio.address}: ${msg}`);
 	},
 
-	warn: function(msg) {
+	warn: function (msg) {
 		log.warn(`autoconf: radio ${this.radio.address}: ${msg}`);
 	},
 
-	error: function(msg) {
+	error: function (msg) {
 		log.error(`autoconf: radio ${this.radio.address}: ${msg}`);
 	},
 
-	transitionState: function(new_state) {
+	transitionState: function (new_state) {
 		this.debug(`transition state ${this.state} to ${new_state}`);
 
 		this.state = new_state;
@@ -69,7 +71,7 @@ const IAgentSession = {
 			pop(this.midsInFlight);
 	},
 
-	sendApAutoconfigurationSearch: function() {
+	sendApAutoconfigurationSearch: function () {
 		this.debug(`sending AP Auto-Configuration search request`);
 
 		let msg = cmdu.create(defs.MSG_AP_AUTOCONFIGURATION_SEARCH);
@@ -77,15 +79,17 @@ const IAgentSession = {
 		msg.add_tlv(defs.TLV_AL_MAC_ADDRESS, model.address);
 		msg.add_tlv(defs.TLV_SEARCHED_ROLE, 0x00); // Registrar
 
-		msg.add_tlv(defs.TLV_SUPPORTED_SERVICE, [ 0x01 ]); // Multi-AP Agent
-		msg.add_tlv(defs.TLV_SEARCHED_SERVICE, [ 0x00 ]); // Multi-AP Controller
+		msg.add_tlv(defs.TLV_SUPPORTED_SERVICE, [0x01]); // Multi-AP Agent
+		msg.add_tlv(defs.TLV_SEARCHED_SERVICE, [0x00]); // Multi-AP Controller
 		msg.add_tlv(defs.TLV_MULTI_AP_PROFILE, 0x03); // Multi-AP Profile 3
 
 		switch (this.radio.band) {
-		case '2g': msg.add_tlv(defs.TLV_AUTOCONFIG_FREQUENCY_BAND, 0x00); break;
-		case '5g': msg.add_tlv(defs.TLV_AUTOCONFIG_FREQUENCY_BAND, 0x01); break;
-		// FIXME: IEEE 1905.1 does not define a 6G band, send 5GHz for now
-		case '6g': msg.add_tlv(defs.TLV_AUTOCONFIG_FREQUENCY_BAND, 0x01); break;
+			case wconst.WPS_RF_2GHZ: msg.add_tlv(defs.TLV_AUTOCONFIG_FREQUENCY_BAND, 0x00); break;
+			case wconst.WPS_RF_5GHZ: msg.add_tlv(defs.TLV_AUTOCONFIG_FREQUENCY_BAND, 0x01); break;
+			case wconst.WPS_RF_60GHZ: msg.add_tlv(defs.TLV_AUTOCONFIG_FREQUENCY_BAND, 0x02); break;
+
+			// FIXME: IEEE 1905.1 does not define a 6G band, send 5GHz for now
+			case wconst.WPS_RF_6GHZ: msg.add_tlv(defs.TLV_AUTOCONFIG_FREQUENCY_BAND, 0x01); break;
 		}
 
 		push(this.midsInFlight, msg.mid);
@@ -94,7 +98,7 @@ const IAgentSession = {
 			msg.send(i1905lif.i1905txsock, model.address, defs.IEEE1905_MULTICAST_MAC);
 	},
 
-	sendApAutoconfigurationWscM1: function() {
+	sendApAutoconfigurationWscM1: function () {
 		this.debug(`sending AP Auto-Configuration WSC M1`);
 
 		let msg = cmdu.create(defs.MSG_AP_AUTOCONFIGURATION_WSC);
@@ -129,60 +133,77 @@ const IAgentSession = {
 			model.address, this.controller.address);
 	},
 
-	step: function() {
+	step: function () {
 		switch (this.state) {
-		case 'init':
-			this.transitionState('search_controller');
-			break;
-
-		case 'search_controller':
-			if (this.retryCount === 0 || this.isTimerExpired(60)) {  // 1 minute between attempts
-				this.sendApAutoconfigurationSearch();
-				this.retryCount++;
-				this.lastActionTime = time();
-			}
-
-			if (this.retryCount >= MAX_RETRIES)
-				this.transitionState('backoff');
-
-			break;
-
-		case 'backoff':
-			if (this.isTimerExpired(300)) {  // 5 minutes backoff
-				this.retryCount = 0;
+			case 'init':
 				this.transitionState('search_controller');
-			}
+				break;
 
-			break;
+			case 'search_controller':
+				if (this.retryCount === 0 || this.isTimerExpired(60)) {  // 1 minute between attempts
+					this.sendApAutoconfigurationSearch();
+					this.retryCount++;
+					this.lastActionTime = time();
+				}
 
-		case 'config_request':
-			if (this.retryCount === 0 || this.isTimerExpired(30)) {  // 30 seconds between attempts
-				this.sendApAutoconfigurationWscM1();
-				this.retryCount++;
-				this.lastActionTime = time();
-			}
+				if (this.retryCount >= MAX_RETRIES)
+					this.transitionState('backoff');
 
-			if (this.retryCount >= MAX_RETRIES)
-				this.transitionState('search_controller');
+				break;
 
-			break;
+			case 'backoff':
+				if (this.isTimerExpired(300)) {  // 5 minutes backoff
+					this.retryCount = 0;
+					this.transitionState('search_controller');
+				}
 
-		case 'config_apply':
-			const settings = wsc.wscProcessM2(this.key, this.m1, this.m2);
+				break;
 
-			if (!settings) {
-				this.error('failed to process M2');
-				this.transitionState('config_request');
-			}
-			else {
-				this.info(`got settings: ${settings}`);
+			case 'config_request':
+				if (this.retryCount === 0 || this.isTimerExpired(30)) {  // 30 seconds between attempts
+					this.sendApAutoconfigurationWscM1();
+					this.retryCount++;
+					this.lastActionTime = time();
+				}
+
+				if (this.retryCount >= MAX_RETRIES)
+					this.transitionState('search_controller');
+
+				break;
+
+			case 'config_apply':
+				const bssConfigs = [];
+
+				for (let m2 in this.m2) {
+					const settings = wsc.wscProcessM2(this.key, this.m1, m2);
+
+					if (!settings) {
+						this.error('failed to process M2');
+						this.transitionState('config_request');
+						return;
+					}
+
+					this.info(`got settings: ${settings}`);
+					push(bssConfigs, settings);
+				}
+
+				uloop.process('/usr/libexec/umap/wifi-apply',
+					[sprintf('%J', bssConfigs)],
+					{
+						RADIO: this.radio.config,
+						PHY: this.radio.phyname,
+						NETWORK: 'easymesh' // FIXME: derive from local interface
+					},
+					function (exitcode) {
+						log.debug(`wifi-apply exited with code ${exitcode}`);
+					});
+
 				this.transitionState('idle');
-			}
-			break;
+				break;
 		}
 	},
 
-	handle_cmdu: function(i1905lif, dstmac, srcmac, msg) {
+	handle_cmdu: function (i1905lif, dstmac, srcmac, msg) {
 		if (!(msg.mid in this.midsInFlight))
 			return false;
 
@@ -200,7 +221,7 @@ const IAgentSession = {
 
 			const controllerProfile = msg.get_tlv(defs.TLV_MULTI_AP_PROFILE)?.profile;
 
-			if (!(controllerProfile in [ 0x01, 0x02, 0x03 ]))
+			if (!(controllerProfile in [0x01, 0x02, 0x03]))
 				return this.warn(`ignoring response advertising unsupported Multi-AP profile`);
 
 			this.controller = {
@@ -218,22 +239,26 @@ const IAgentSession = {
 			if (this.state != 'config_request')
 				return this.warn(`received AP Auto-Configuration WSC message while not in config_request state`);
 
-//			let sender = model.lookupDevice(srcmac);
-//
-//			if (!sender)
-//				return this.warn(`received AP Auto-Configuration WSC message from unknown device ${srcmac}`);
+			//			let sender = model.lookupDevice(srcmac);
+			//
+			//			if (!sender)
+			//				return this.warn(`received AP Auto-Configuration WSC message from unknown device ${srcmac}`);
 
-			const wscFrame = msg.get_tlv(defs.TLV_WSC);
+			const wscFrames = msg.get_tlvs(defs.TLV_WSC);
 
-			if (wscFrame == null)
+			if (length(wscFrames) == 0)
 				return this.warn(`received AP Auto-Configuration WSC message without WSC TLV`);
 
-			const wscType = wsc.wscGetType(wscFrame);
+			this.m2 = [];
 
-			if (wscType != 2)
-				return this.warn(`received AP Auto-Configuration WSC message with unxpected type (${wscType ?? 'unknown'})`);
+			for (let wscFrame in wscFrames) {
+				const wscType = wsc.wscGetType(wscFrame);
 
-			this.m2 = wscFrame;
+				if (wscType != 2)
+					return this.warn(`received AP Auto-Configuration WSC message with unxpected type (${wscType ?? 'unknown'})`);
+
+				push(this.m2, wscFrame);
+			}
 
 			this.transitionState('config_apply');
 			this.step();
@@ -242,40 +267,12 @@ const IAgentSession = {
 };
 
 const IProtoAutoConf = {
-	sendApAutoconfigurationWscM2: function(radio_unique_id, m1, ...desiredConfigurations) {
-		log.debug(`autoconf: sending AP Auto-Configuration WSC M2 for radio ${radio_unique_id}`);
-
-		let msg = cmdu.create(defs.MSG_AP_AUTOCONFIGURATION_WSC);
-
-		msg.add_tlv(defs.TLV_AP_RADIO_IDENTIFIER, radio_unique_id);
-
-		if (length(desiredConfigurations) == 0) {
-			push(desiredConfigurations, {
-				authentication_types: wireless.WPS_AUTH_OPEN,
-				encryption_types: wireless.WPS_ENCR_NONE,
-				band: wireless.WPS_RF_2GHZ,
-				bssid: '00:00:00:00:00:00',
-				ssid: '',
-				network_key: '',
-				multi_ap: {
-					tear_down: true
-				}
-			});
-		}
-
-		for (let desiredConfiguration in desiredConfigurations)
-			msg.add_tlv(defs.TLV_WSC, wsc.wscBuildM2(m1, desiredConfiguration));
-
-		msg.send(this.controller.i1905lif.i1905txsock,
-			model.address, this.controller.address);
-	},
-
-	init: function() {
+	init: function () {
 		const sessions = this.sessions;
 
 		// No scheduled work to do in controller mode
 		if (model.isController)
-			return;
+			return configuration.parseBSSConfigurations();
 
 		for (let radio in model.getRadios()) {
 			// Let first session trigger controller discovery, start others in
@@ -286,7 +283,7 @@ const IProtoAutoConf = {
 			}, IAgentSession));
 		}
 
-		uloop.timer(1000, function() {
+		uloop.timer(1000, function () {
 			this.set(1000);
 
 			for (let session in sessions)
@@ -294,7 +291,7 @@ const IProtoAutoConf = {
 		});
 	},
 
-	handle_controller_cmdu: function(i1905lif, dstmac, srcmac, msg) {
+	handle_controller_cmdu: function (i1905lif, dstmac, srcmac, msg) {
 		if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_SEARCH) {
 			log.debug(`autoconf: received AP Auto-Configuration search request`);
 
@@ -326,7 +323,7 @@ const IProtoAutoConf = {
 
 			reply.add_tlv(defs.TLV_SUPPORTED_ROLE, 0x00); // Registrar
 			reply.add_tlv(defs.TLV_SUPPORTED_FREQUENCY_BAND, searchesBand.frequency_band);
-			reply.add_tlv(defs.TLV_SUPPORTED_SERVICE, [ 0x00 ]); // Controller
+			reply.add_tlv(defs.TLV_SUPPORTED_SERVICE, [0x00]); // Controller
 
 			reply.add_tlv(defs.TLV_IEEE1905_LAYER_SECURITY_CAPABILITY, {
 				onboarding_protocol: 0x00,  // DPP
@@ -366,33 +363,58 @@ const IProtoAutoConf = {
 			if (wscType != 1)
 				return log.warn(`autoconf: received AP Auto-Configuration WSC message with unxpected type (${wscType ?? 'unknown'})`);
 
-			const m2 = wsc.wscBuildM2(wscFrame, {
-				authentication_types: wireless.WPS_AUTH_WPA2PSK,
-				encryption_types: wireless.WPS_ENCR_AES,
-				band: wireless.WPS_RF_2GHZ,
-				bssid: '02:03:04:05:06:07',
-				ssid: 'FOOBAR',
-				network_key: '1234567890',
-				multi_ap: {
-					is_backhaul_sta: false,
-					is_backhaul_bss: false,
-					is_fronthaul_bss: true,
-					tear_down: false,
-					multi_ap_profile1_backhaul_sta_assoc_dissallowed: true,
-					multi_ap_profile2_backhaul_sta_assoc_dissallowed: true
-				},
-			});
+			const wscDetails = wsc.wscProcessM1(wscFrame);
+			const desiredBSSes = configuration.selectBSSConfigurations(
+				wscDetails.supported_bands,
+				wscDetails.supported_authentication_types,
+				wscDetails.supported_encryption_types);
+
+			if (length(desiredBSSes) == 0) {
+				push(desiredBSSes, {
+					auth_mask: wconst.WPS_AUTH_OPEN,
+					cipher_mask: wconst.WPS_ENCR_NONE,
+					band_mask: wconst.WPS_RF_2GHZ,
+					bssid: '00:00:00:00:00:00',
+					ssid: '',
+					network_key: '',
+					multi_ap: {
+						tear_down: true
+					}
+				})
+			}
 
 			let reply = cmdu.create(defs.MSG_AP_AUTOCONFIGURATION_WSC, msg.mid);
 
 			reply.add_tlv(defs.TLV_AP_RADIO_IDENTIFIER, radioCapabilities.radio_unique_identifier);
-			reply.add_tlv(defs.TLV_WSC, m2);
+
+			let bssid = radioCapabilities.radio_unique_identifier;
+
+			for (let i, desiredBSS in desiredBSSes) {
+				const m2 = wsc.wscBuildM2(wscFrame, {
+					authentication_types: desiredBSS.auth_mask,
+					encryption_types: desiredBSS.cipher_mask,
+					band: desiredBSS.band_mask,
+					bssid: utils.ether_increment(bssid, i),
+					ssid: desiredBSS.ssid,
+					network_key: desiredBSS.key ?? '',
+					multi_ap: {
+						is_backhaul_sta: false,
+						is_backhaul_bss: (desiredBSS.type == 'backhaul'),
+						is_fronthaul_bss: (desiredBSS.type == 'fronthaul'),
+						tear_down: false,
+						multi_ap_profile1_backhaul_sta_assoc_dissallowed: false,
+						multi_ap_profile2_backhaul_sta_assoc_dissallowed: false
+					},
+				});
+
+				reply.add_tlv(defs.TLV_WSC, m2);
+			}
 
 			reply.send(i1905lif.i1905txsock, model.address, sender.al_address);
 		}
 	},
 
-	handle_agent_cmdu: function(i1905lif, dstmac, srcmac, msg) {
+	handle_agent_cmdu: function (i1905lif, dstmac, srcmac, msg) {
 		for (let session in this.sessions)
 			if (session.handle_cmdu(i1905lif, dstmac, srcmac, msg))
 				return true;
@@ -402,7 +424,7 @@ const IProtoAutoConf = {
 		return false;
 	},
 
-	handle_cmdu: function(i1905lif, dstmac, srcmac, msg) {
+	handle_cmdu: function (i1905lif, dstmac, srcmac, msg) {
 		if (model.isController)
 			return this.handle_controller_cmdu(i1905lif, dstmac, srcmac, msg);
 		else

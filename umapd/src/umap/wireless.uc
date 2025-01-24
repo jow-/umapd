@@ -370,7 +370,7 @@ const IRadio = {
 		}
 
 		return bands;
-	},
+	}
 };
 
 export default {
