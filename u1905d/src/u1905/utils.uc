@@ -16,6 +16,8 @@
 
 import { unpack } from 'struct';
 
+import defs from 'u1905.defs';
+
 const Queue = {
 	push: function(item) {
 		if (item == null || item in this.q)
@@ -152,5 +154,32 @@ export default {
 
 	ether_aton: function(mac) {
 		return hexdec(mac, ':');
-	}
+	},
+
+	lookup_enum: function(v, d) {
+		for (let k in d)
+			if (d[k] == v)
+				return k;
+	},
+
+	uuid_ntoa: function(uuid) {
+		let bytes = (type(uuid) == 'array') ? uuid : unpack('16B', uuid);
+		return bytes ? sprintf('%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x', ...bytes) : 0;
+	},
+
+	uuid_aton: function(uuid) {
+		return hexdec(uuid, '-');
+	},
+
+	cmdu_type_ntoa: function(cmdu_type) {
+		for (let k, v in defs)
+			if (v === cmdu_type && index(k, 'MSG_') === 0)
+				return substr(k, 4);
+	},
+
+	tlv_type_ntoa: function(tlv_type) {
+		for (let k, v in defs)
+			if (v === tlv_type && index(k, 'TLV_') === 0)
+				return substr(k, 4);
+	},
 };

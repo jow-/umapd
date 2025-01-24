@@ -293,6 +293,12 @@ export default {
 		[0x03]: 'Decline because request would prevent operation of a currently operating backhaul link (where backhaul STA and BSS share a radio)',
 	},
 
+	IEEE1905_FREQUENCY_BAND: {
+		[0x00]: '802.11 2.4 GHz',
+		[0x01]: '802.11 5 GHz',
+		[0x02]: '802.11 60 GHz',
+	},
+
 	IEEE1905_PROFILE: {
 		[0x00]: '1905.1',
 		[0x01]: '1905.1a',
@@ -372,6 +378,11 @@ export default {
 		[0x03]: 'Multi-AP Profile-3',
 	},
 
+	MULTI_AP_SERVICE: {
+		[0x00]: 'Multi-AP Controller',
+		[0x01]: 'Multi-AP Agent',
+	},
+
 	POWER_STATE: {
 		[0x00]: 'PWR_OFF',
 		[0x01]: 'PWR_ON',
@@ -432,19 +443,10 @@ export default {
 		[0x06]: 'Fresh scan not supported. Radio only supports on boot scans.',
 	},
 
-	SEARCHED_SERVICE: {
-		[0x00]: 'Multi-AP Controller',
-	},
-
 	STEERING_POLICY: {
 		[0x00]: 'Agent Initiated Steering Disallowed',
 		[0x01]: 'Agent Initiated RCPI-based Steering Mandated',
 		[0x02]: 'Agent Initiated RCPI-based Steering Allowed',
-	},
-
-	SUPPORTED_SERVICE: {
-		[0x00]: 'Multi-AP Controller',
-		[0x01]: 'Multi-AP Agent',
 	},
 
 	TUNNELED_PROTOCOL_TYPE: {

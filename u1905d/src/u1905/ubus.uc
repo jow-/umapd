@@ -14,8 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+import log from 'u1905.log';
 import defs from 'u1905.defs';
 import model from 'u1905.model';
+import utils from 'u1905.utils';
 
 import { connect as ubus_connect, error as ubus_error } from 'ubus';
 
@@ -148,7 +150,7 @@ const I1905UbusProcedures = {
 				let rec = {};
 
 				for (let tlvtype, tlvs in i1905dev.tlvs) {
-					let k = defs.getTLVTypeName(tlvtype);
+					const k = utils.tlv_type_ntoa(+tlvtype);
 
 					rec[k] = [];
 

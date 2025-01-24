@@ -19,6 +19,7 @@
 
 import * as uloop from 'uloop';
 
+import * as sys from 'u1905.core';
 import socket from 'u1905.socket';
 import cmdu from 'u1905.cmdu';
 import lldp from 'u1905.lldp';
@@ -28,23 +29,11 @@ import defs from 'u1905.defs';
 import ubus from 'u1905.ubus';
 import log from 'u1905.log';
 
+import autoconf from 'umap.proto.autoconf';
+
 function srcmac_to_almac(address) {
 	let i1905dev = model.lookupDevice(address);
 	return i1905dev?.al_address;
-}
-
-// FIXME: common helper
-function cmdu_name(type) {
-	for (let k, v in defs)
-		if (v === type && index(k, 'MSG_') === 0)
-			return substr(k, 4);
-}
-
-// FIXME: common helper
-function tlv_name(type) {
-	for (let k, v in defs)
-		if (v === type && index(k, 'TLV_') === 0)
-			return substr(k, 4);
 }
 
 function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
@@ -53,14 +42,14 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 	log.debug('RX %-8s: %s > %s : %04x (%s) [%d]',
 		i1905lif.ifname,
 		srcmac, dstmac,
-		msg.type, cmdu_name(msg.type) ?? 'Unknown Type',
+		msg.type, utils.cmdu_type_ntoa(msg.type) ?? 'Unknown Type',
 		msg.mid);
 
 	for (let i = 0; msg.tlvs[i] != null; i += 3)
 		if (msg.tlvs[i] != 0)
 			log.debug('  TLV %02x (%s) - %d byte',
 				msg.tlvs[i],
-				tlv_name(msg.tlvs[i]),
+				utils.tlv_type_ntoa(msg.tlvs[i]),
 				msg.tlvs[i+2] - msg.tlvs[i+1]);
 
 	// ignore packets looped back to us
@@ -156,7 +145,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 			defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC,
 			defs.TLV_IEEE1905_RECEIVER_LINK_METRIC
 		)) {
-			if (requested_metrics.mac == null || utils.ether_ntoa(tlv.payload, 6) == requested_metrics.mac)
+			if (requested_metrics.al_mac_address == null || utils.ether_ntoa(tlv.payload, 6) == requested_metrics.al_mac_address)
 				reply.add_tlv_raw(tlv.type, tlv.payload);
 		}
 
@@ -177,15 +166,15 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 	else if (msg.type == defs.MSG_LINK_METRIC_RESPONSE) {
 		let tlvs_by_al_address;
 
-		for (let tlv in msg.get_tlvs(defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC, defs.TLV_IEEE1905_RECEIVER_LINK_METRIC)) {
-			let metrics = tlv.data;
+		for (let tlv in msg.get_tlvs_raw(defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC, defs.TLV_IEEE1905_RECEIVER_LINK_METRIC)) {
+			const transmitter_al_mac_address = utils.ether_ntoa(tlv.payload);
 
-			if (!metrics?.transmitter_al_mac_address) {
+			if (!transmitter_al_mac_address) {
 				log.warn(`Ignoring malformed metrics reply CMDU`);
 				return;
 			}
 
-			push((tlvs_by_al_address ??= {})[metrics.transmitter_al_mac_address] ??= [], tlv);
+			push((tlvs_by_al_address ??= {})[transmitter_al_mac_address] ??= [], tlv);
 		}
 
 		for (let al_address, tlvs in tlvs_by_al_address) {
@@ -228,6 +217,9 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
 		i1905dev.updateTLVs(msg.get_tlvs_raw());
 	}
+	else {
+		autoconf.handle_cmdu(i1905lif, dstmac, srcmac, msg);
+	}
 
 	if (msg.flags & defs.CMDU_F_ISRELAY) {
 		// unknown origin
@@ -258,6 +250,12 @@ function handle_i1905_input(flags) {
 			break;
 
 		let i1905lif = model.lookupLocalInterface(payload[5] ?? sock);
+
+		if (!i1905lif) {
+			log.warn('Received CMDU on unknown interface');
+			continue;
+		}
+
 		let msg = cmdu.parse(payload[1], payload[3]);
 
 		if (!msg)
@@ -339,22 +337,68 @@ function emit_topology_notification() {
 	model.topologyChanged = false;
 }
 
-
 uloop.init();
 
-for (let ifname in ARGV) {
-	let ifc = model.addLocalInterface(ifname);
+let opts = sys.getopt([
+    'interface|iface|i=s*',
+    'radio|phy|r=s*',
+    'controller',
+    'mac=s',
+    'help'
+]);
 
-	if (ifc) {
-		uloop.handle(ifc.i1905rxsock, handle_i1905_input, uloop.ULOOP_READ|uloop.ULOOP_EDGE_TRIGGER);
-		uloop.handle(ifc.lldprxsock, handle_lldp_input, uloop.ULOOP_READ|uloop.ULOOP_EDGE_TRIGGER);
-	}
-	else {
-		log.error(`Unable to initialize interface ${ifname}: ${socket.error()}`);
-		exit(1);
-	}
+if ('help' in opts) {
+    print(
+        'Usage:\n',
+        `       ${ARGV[0]} --help\n`,
+        `       ${ARGV[0]} [--role=role] [--mac=02:00:00:00:00:01] [--interface eth0 ...] [--radio phy0 ...]\n`,
+        '\n',
+        '--interface IFNAME\n',
+        '  Use the given network interface as backhaul link\n',
+        '\n',
+        '--radio PHYNAME\n',
+        '  Manage the given radio identified by the wiphy name\n',
+        '\n',
+        '--controller\n',
+        '  Act as Multi-AP controller\n',
+        '\n',
+        '--mac MACADDR\n',
+        '  Specify the AL MAC address to use. If omitted, a suitable address is generated\n'
+    );
 }
 
+if (!length(opts.radio)) {
+    log.error('Require at least one radio\n');
+    exit(1);
+}
+else {
+    for (let radio in opts.radio) {
+        if (!model.addRadio(radio)) {
+            log.error(`Radio phy '${radio}' unusable - aborting.\n`);
+            exit(1);
+        }
+    }
+}
+
+if (!length(opts.interface)) {
+    log.error('Require at least one interface\n');
+    //exit(1);
+}
+else {
+    for (let ifname in opts.interface) {
+        let ifc = model.addLocalInterface(ifname);
+        if (ifc) {
+            uloop.handle(ifc.i1905rxsock, handle_i1905_input, uloop.ULOOP_READ|uloop.ULOOP_EDGE_TRIGGER);
+            uloop.handle(ifc.lldprxsock, handle_lldp_input, uloop.ULOOP_READ|uloop.ULOOP_EDGE_TRIGGER);
+        }
+        else {
+            log.error(`Unable to initialize interface ${ifname}: ${socket.error()}`);
+            exit(1);
+        }
+    }
+}
+
+model.isController = !!opts.controller;
 model.initializeAddress();
 
 if (!ubus.publish())
@@ -364,5 +408,7 @@ uloop.timer(250, update_self);
 uloop.timer(500, emit_topology_discovery);
 uloop.timer(1000, emit_topology_notification);
 uloop.timer(5000, cleanup_model);
+
+autoconf.init();
 
 uloop.run();

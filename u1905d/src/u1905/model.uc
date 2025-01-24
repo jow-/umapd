@@ -16,7 +16,7 @@
 
 import { request as wlrequest, 'const' as wlconst } from 'nl80211';
 import { request as rtrequest, 'const' as rtconst } from 'rtnl';
-import { unpack, buffer } from 'struct';
+import { pack, unpack, buffer } from 'struct';
 import { open, readfile } from 'fs';
 
 import socket from 'u1905.socket';
@@ -26,6 +26,8 @@ import * as codec from 'u1905.tlv.codec';
 //import tlv from 'u1905.tlv';
 import log from 'u1905.log';
 import defs from 'u1905.defs';
+
+import wireless from 'umap.wireless';
 
 function timems() {
 	let tv = clock(true) ?? clock(false);
@@ -351,7 +353,7 @@ const I1905LocalInterface = proto({
 
 				for (let band in info.wifi.phy.wiphy_bands) {
 					for (let freq in band?.freqs) {
-						if (freq.freq == info.wifi.interface.center_freq1) {
+						if (freq.freq == info.wifi.interface.wiphy_freq) {
 							if (band.vht_capa) {
 								info.type = 0x0105; /* IEEE 802.11ac (5 GHz) */
 							}
@@ -388,15 +390,19 @@ const I1905LocalInterface = proto({
 		let info = this.getRuntimeInformation();
 
 		if (info.ipaddrs === null) {
-			let addrs = rtrequest(rtconst.RTM_GETADDR, rtconst.NLM_F_DUMP|rtconst.NLM_F_STRICT_CHK, { dev: this.ifname, family: rtconst.AF_INET });
 			let ifstat;
 
-			for (let s in ifstatus?.interface) {
-				if (s?.l3_device == info.ifname) {
+			for (let s in ifstatus) {
+				if (s?.l3_device == info.ifname || s?.l3_device == info.bridge) {
 					ifstat = s;
 					break;
 				}
 			}
+
+			let addrs = rtrequest(rtconst.RTM_GETADDR, rtconst.NLM_F_DUMP|rtconst.NLM_F_STRICT_CHK, {
+				dev: info.bridge ?? this.ifname,
+				family: rtconst.AF_INET
+			});
 
 			info.ipaddrs = [];
 
@@ -410,7 +416,7 @@ const I1905LocalInterface = proto({
 				ip_mask_type_dhcp[3] = '0.0.0.0';
 
 				for (let a in ifstat?.['ipv4-address']) {
-					if (a == ip_mask_type_dhcp[0]) {
+					if (a.address == ip_mask_type_dhcp[0]) {
 						switch (ifstat.proto) {
 						case 'dhcp':
 							ip_mask_type_dhcp[2] = 1;
@@ -435,15 +441,19 @@ const I1905LocalInterface = proto({
 		let info = this.getRuntimeInformation();
 
 		if (info.ip6addrs === null) {
-			let addrs = rtrequest(rtconst.RTM_GETADDR, rtconst.NLM_F_DUMP|rtconst.NLM_F_STRICT_CHK, { dev: this.ifname, family: rtconst.AF_INET6 });
 			let ifstat;
 
-			for (let s in ifstatus?.interface) {
-				if (s?.l3_device == info.ifname) {
+			for (let s in ifstatus) {
+				if (s?.l3_device == info.ifname || s?.l3_device == info.bridge) {
 					ifstat = s;
 					break;
 				}
 			}
+
+			let addrs = rtrequest(rtconst.RTM_GETADDR, rtconst.NLM_F_DUMP|rtconst.NLM_F_STRICT_CHK, {
+				dev: info.bridge ?? this.ifname,
+				family: rtconst.AF_INET6
+			});
 
 			info.ip6addrs = [ [ '::', 0, 0, '::' ] ];
 
@@ -470,7 +480,7 @@ const I1905LocalInterface = proto({
 
 				// Infer address types
 				for (let a in ifstat?.['ipv6-address']) {
-					if (a == ip_mask_type_origin[0]) {
+					if (a.address == ip_mask_type_origin[0]) {
 						switch (ifstat.proto) {
 						case 'dhcpv6':
 							if (a.mask == 64)
@@ -665,6 +675,15 @@ const I1905Device = proto({
 			case defs.TLV_AP_METRICS:
 			case defs.TLV_MULTI_AP_PROFILE:
 			case defs.TLV_PROFILE_2_AP_CAPABILITY:
+			case defs.TLV_SUPPORTED_SERVICE:
+			case defs.TLV_SEARCHED_SERVICE:
+			case defs.TLV_AP_RADIO_IDENTIFIER:
+			case defs.TLV_AP_OPERATIONAL_BSS:
+			case defs.TLV_ASSOCIATED_CLIENTS:
+			case defs.TLV_AP_METRICS:
+			case defs.TLV_MULTI_AP_PROFILE:
+			case defs.TLV_PROFILE_2_AP_CAPABILITY:
+			case defs.TLV_PROFILE_2_AP_CAPABILITY:
 				if (!this.tlvs[tlv.type]) {
 					this.tlvs[tlv.type] = [ now ];
 				}
@@ -753,7 +772,12 @@ const I1905Device = proto({
 		if (!d)
 			return null;
 
-		return decode_tlv(defs.TLV_DEVICE_IDENTIFICATION, d);
+		const id = decode_tlv(defs.TLV_DEVICE_IDENTIFICATION, d);
+
+		for (let k, v in id)
+			id[k] = trim(v);
+
+		return id;
 	},
 
 	getLinks: function() {
@@ -761,12 +785,12 @@ const I1905Device = proto({
 
 		for (let type in [ defs.TLV_IEEE1905_RECEIVER_LINK_METRIC, defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC ]) {
 			for (let i = 1; i < length(this.tlvs[type]); i++) {
-				let d = decode_tlv(type, this.tlvs[type][i]);
+				let d = decode_tlv(+type, this.tlvs[type][i]);
 
-				for (let link in d?.links) {
-					links[link.local_address] ??= {};
+				for (let link in d?.link_metrics) {
+					links[link.local_if_mac_address] ??= {};
 
-					let m = (links[link.local_address][link.remote_address] ??= {
+					let m = (links[link.local_if_mac_address][link.remote_if_mac_address] ??= {
 						rx_errors: 0,
 						rx_packets: 0,
 						tx_errors: 0,
@@ -782,17 +806,17 @@ const I1905Device = proto({
 					m.media_type_name ??= link.media_type_name;
 
 					if (type == defs.TLV_IEEE1905_RECEIVER_LINK_METRIC) {
-						m.rx_errors = link.errors;
-						m.rx_packets = link.packets;
+						m.rx_errors = link.packet_errors;
+						m.rx_packets = link.received_packets;
 						m.rssi = link.rssi;
 					}
 					else {
-						m.tx_errors = link.errors;
-						m.tx_packets = link.packets;
-						m.throughput = link.throughput;
-						m.availability = link.availability;
-						m.is_bridge = link.is_bridge;
-						m.speed = link.speed;
+						m.tx_errors = link.packet_errors;
+						m.tx_packets = link.transmitted_packets;
+						m.throughput = link.mac_throughput_capacity;
+						m.availability = link.link_availability;
+						m.is_bridge = link.bridges_present;
+						m.speed = link.phy_rate;
 					}
 				}
 			}
@@ -836,19 +860,19 @@ const I1905Device = proto({
 				//let neighbor, addresses;
 				switch (+type) {
 				//case defs.TLV_DEVICE_INFORMATION:
-				//	res.info = tlv.decode(+type, tlvs[i]);
+				//	res.info = decode_tlv(+type, tlvs[i]);
 				//	break;
 
 				case defs.TLV_IEEE1905_NEIGHBOR_DEVICES:
-					let neighbor = tlv.decode(+type, tlvs[i]);
+					let neighbor = decode_tlv(+type, tlvs[i]);
 					if (neighbor) {
 						res.neighbors ??= {};
 						push(res.neighbors.ieee1905 ??= [], neighbor);
 					}
 					break;
 
-				case defs.TLV_NON1905_NEIGHBOR_DEVICES:
-					let addresses = tlv.decode(+type, tlvs[i]);
+				case defs.TLV_NON_IEEE1905_NEIGHBOR_DEVICES:
+					let addresses = decode_tlv(+type, tlvs[i]);
 					if (addresses) {
 						res.neighbors ??= {};
 
@@ -861,50 +885,50 @@ const I1905Device = proto({
 
 				//case defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC:
 				//	res.metrics ??= {};
-				//	push(res.metrics.tx ??= [], tlv.decode(+type, tlvs[i]));
+				//	push(res.metrics.tx ??= [], decode_tlv(+type, tlvs[i]));
 				//	break;
 
 				//case defs.TLV_IEEE1905_RECEIVER_LINK_METRIC:
 				//	res.metrics ??= {};
-				//	push(res.metrics.rx ??= [], tlv.decode(+type, tlvs[i]));
+				//	push(res.metrics.rx ??= [], decode_tlv(+type, tlvs[i]));
 				//	break;
 
 				case defs.TLV_L2_NEIGHBOR_DEVICE:
-					res.l2 = tlv.decode(+type, tlvs[i]);
+					res.l2 = decode_tlv(+type, tlvs[i]);
 					break;
 
-				//case defs.TLV_IPV4:
-				//	res.ipv4 ??= [];
-				//	push(res.ipv4, ...tlv.decode(+type, tlvs[i]));
-				//	break;
+				case defs.TLV_IPV4:
+					res.ipv4 ??= [];
+					push(res.ipv4, ...decode_tlv(+type, tlvs[i]));
+					break;
 
-				//case defs.TLV_IPV6:
-				//	res.ipv6 ??= [];
-				//	push(res.ipv6, ...tlv.decode(+type, tlvs[i]));
-				//	break;
-
-				case defs.TLV_SUPPORTED_SERVICE:
-					res.map ??= {};
-					res.map.supported_services = tlv.decode(+type, tlvs[i]);
+				case defs.TLV_IPV6:
+					res.ipv6 ??= [];
+					push(res.ipv6, ...decode_tlv(+type, tlvs[i]));
 					break;
 
 				case defs.TLV_SUPPORTED_SERVICE:
 					res.map ??= {};
-					res.map.searched_services = tlv.decode(+type, tlvs[i]);
+					res.map.supported_services = decode_tlv(+type, tlvs[i]);
+					break;
+
+				case defs.TLV_SUPPORTED_SERVICE:
+					res.map ??= {};
+					res.map.searched_services = decode_tlv(+type, tlvs[i]);
 					break;
 
 				case defs.TLV_AP_OPERATIONAL_BSS:
 					res.map ??= {};
-					res.map.ap_operational_bss = tlv.decode(+type, tlvs[i]);
+					res.map.ap_operational_bss = decode_tlv(+type, tlvs[i]);
 					break;
 
 				case defs.TLV_AP_RADIO_IDENTIFIER:
 					res.map ??= {};
-					res.map.ap_radio_identifier = tlv.decode(+type, tlvs[i]);
+					res.map.ap_radio_identifier = decode_tlv(+type, tlvs[i]);
 					break;
 
 				case defs.TLV_ASSOCIATED_CLIENTS:
-					for (let bss in tlv.decode(+type, tlvs[i])) {
+					for (let bss in decode_tlv(+type, tlvs[i])) {
 						for (let client in bss.clients) {
 							res.neighbors ??= {};
 							res.neighbors.others ??= {};
@@ -920,18 +944,18 @@ const I1905Device = proto({
 
 				case defs.TLV_AP_METRICS:
 					res.map ??= {};
-					res.map.ap_metrics = tlv.decode(+type, tlvs[i]);
+					res.map.ap_metrics = decode_tlv(+type, tlvs[i]);
 					break;
 
 				case defs.TLV_MULTI_AP_PROFILE:
 					res.map ??= {};
-					for (let k, v in tlv.decode(+type, tlvs[i]))
+					for (let k, v in decode_tlv(+type, tlvs[i]))
 						res.map[k] = v;
 					break;
 
 				case defs.TLV_PROFILE_2_AP_CAPABILITY:
 					res.map ??= {};
-					res.map.capabilities = tlv.decode(+type, tlvs[i]);
+					res.map.capabilities = decode_tlv(+type, tlvs[i]);
 					break;
 				}
 			}
@@ -986,7 +1010,9 @@ export default proto({
 	address: '00:00:00:00:00:00',
 	interfaces: {},
 	devices: [],
+	radios: [],
 	topologyChanged: false,
+	isController: false,
 	seen: timems(),
 
 	initializeAddress: function() {
@@ -1001,19 +1027,19 @@ export default proto({
 		/* ... hash its bytes ... */
 		mac = unpack('!6B', hexdec(mac, ':'));
 
-		hash = ((hash << 5) + hash) + mac[0];
-		hash = ((hash << 5) + hash) + mac[1];
-		hash = ((hash << 5) + hash) + mac[2];
-		hash = ((hash << 5) + hash) + mac[3];
-		hash = ((hash << 5) + hash) + mac[4];
-		hash = ((hash << 5) + hash) + mac[5];
+		hash = ((hash << 5) - hash) + mac[0];
+		hash = ((hash << 5) - hash) + mac[1];
+		hash = ((hash << 5) - hash) + mac[2];
+		hash = ((hash << 5) - hash) + mac[3];
+		hash = ((hash << 5) - hash) + mac[4];
+		hash = ((hash << 5) - hash) + mac[5];
 
 		/* ... and turn result into a locally administered MAC */
 		this.address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x',
-			0x02 | ((hash >> 56) & 0xfe),
-			(hash >> 48) & 0xff, (hash >> 40) & 0xff,
+			0x02 | ((hash >> 40) & 0xfe),
 			(hash >> 32) & 0xff, (hash >> 24) & 0xff,
-			(hash >> 16) & 0xff);
+			(hash >> 16) & 0xff, (hash >>  8) & 0xff,
+			(hash >>  0) & 0xff);
 
 		log.info(`Using AL MAC address: ${this.address}`);
 	},
@@ -1104,6 +1130,22 @@ export default proto({
 
 	getDevices: function() {
 		return [ ...this.devices ];
+	},
+
+	addRadio: function(phyname) {
+		return wireless.addRadio(phyname);
+	},
+
+	lookupRadio: function(id) {
+		for (let radio in wireless.radios)
+			if (radio.phyname == phyname || radio.index == id)
+				return radio;
+
+		return null;
+	},
+
+	getRadios: function() {
+		return [ ...wireless.radios ];
 	},
 
 	updateSelf: function(ifstatus) {
@@ -1251,7 +1293,7 @@ export default proto({
 	},
 
 	encode_non1905_neighbor_devices_tlv: function(address, others) {
-		return encode_tlv(defs.TLV_NON1905_NEIGHBOR_DEVICES, {
+		return encode_tlv(defs.TLV_NON_IEEE1905_NEIGHBOR_DEVICES, {
 			local_if_mac_address: address,
 			non_ieee1905_neighbors: others
 		});

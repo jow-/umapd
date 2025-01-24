@@ -348,6 +348,8 @@ encoder[0x0d] = (buf, role) => {
 // 0x0e - Autoconfig Frequency Band
 // IEEE1905.1-2013
 encoder[0x0e] = (buf, frequency_band) => {
+	if (!(frequency_band in [ 0x00, 0x01, 0x02 ]))
+		return null;
 
 	buf.put('B', frequency_band);
 
@@ -356,9 +358,11 @@ encoder[0x0e] = (buf, frequency_band) => {
 
 // 0x0f - Supported Role
 // IEEE1905.1-2013
-encoder[0x0f] = (buf, type_of_role) => {
+encoder[0x0f] = (buf, role) => {
+	if (!(role in [ 0x00 ]))
+		return null;
 
-	buf.put('B', type_of_role);
+	buf.put('B', role);
 
 	return buf;
 };
@@ -366,6 +370,8 @@ encoder[0x0f] = (buf, type_of_role) => {
 // 0x10 - Supported Frequency Band
 // IEEE1905.1-2013
 encoder[0x10] = (buf, frequency_band) => {
+	if (!(frequency_band in [ 0x00, 0x01, 0x02 ]))
+		return null;
 
 	buf.put('B', frequency_band);
 
@@ -820,7 +826,7 @@ encoder[0x81] = (buf, services) => {
 	buf.put('B', length(services));
 
 	for (let searched_service in services) {
-		if (!(searched_service in [ 0x00 ]))
+		if (!(searched_service in [ 0x00, 0x01 ]))
 			return null;
 
 		buf.put('B', searched_service);
@@ -3705,7 +3711,7 @@ decoder[0x06] = (buf, end) => {
 	const local_if_mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 	const non_ieee1905_neighbors = [];
 
-	while (buf.pos() + 6 < end) {
+	while (buf.pos() + 6 <= end) {
 		const non_1905_neighbor_device_mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 
 		push(non_ieee1905_neighbors, non_1905_neighbor_device_mac_address);
@@ -3726,7 +3732,7 @@ decoder[0x07] = (buf, end) => {
 	const local_if_mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 	const ieee1905_neighbors = [];
 
-	while (buf.pos() + 7 < end) {
+	while (buf.pos() + 7 <= end) {
 		const neighbor_al_mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 
 		const bitfield = buf.get('B');
@@ -3785,7 +3791,7 @@ decoder[0x09] = (buf, end) => {
 	const neighbor_al_mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 	const link_metrics = [];
 
-	while (buf.pos() + 29 < end) {
+	while (buf.pos() + 29 <= end) {
 		const local_if_mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 		const remote_if_mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 		const media_type = buf.get('!H');
@@ -3831,7 +3837,7 @@ decoder[0x0a] = (buf, end) => {
 	const neighbor_al_mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 	const link_metrics = [];
 
-	while (buf.pos() + 23 < end) {
+	while (buf.pos() + 23 <= end) {
 		const local_if_mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 		const remote_if_mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 		const media_type = buf.get('!H');
@@ -3918,7 +3924,13 @@ decoder[0x0e] = (buf, end) => {
 
 	const frequency_band = buf.get('B');
 
-	return frequency_band;
+	if (!exists(defs.IEEE1905_FREQUENCY_BAND, frequency_band))
+		return null;
+
+	return {
+		frequency_band,
+		frequency_band_name: defs.IEEE1905_FREQUENCY_BAND[frequency_band],
+	};
 };
 
 // 0x0f - Supported Role
@@ -3927,9 +3939,15 @@ decoder[0x0f] = (buf, end) => {
 	if (buf.pos() + 1 > end)
 		return null;
 
-	const type_of_role = buf.get('B');
+	const role = buf.get('B');
 
-	return type_of_role;
+	if (!exists(defs.IEEE1905_ROLE, role))
+		return null;
+
+	return {
+		role,
+		role_name: defs.IEEE1905_ROLE[role],
+	};
 };
 
 // 0x10 - Supported Frequency Band
@@ -3940,7 +3958,13 @@ decoder[0x10] = (buf, end) => {
 
 	const frequency_band = buf.get('B');
 
-	return frequency_band;
+	if (!exists(defs.IEEE1905_FREQUENCY_BAND, frequency_band))
+		return null;
+
+	return {
+		frequency_band,
+		frequency_band_name: defs.IEEE1905_FREQUENCY_BAND[frequency_band],
+	};
 };
 
 // 0x11 - WSC
@@ -4383,10 +4407,13 @@ decoder[0x80] = (buf, end) => {
 
 		const supported_service = buf.get('B');
 
-		if (!exists(defs.SUPPORTED_SERVICE, supported_service))
+		if (!exists(defs.MULTI_AP_SERVICE, supported_service))
 			return null;
 
-		push(services, supported_service);
+		push(services, {
+			supported_service,
+			supported_service_name: defs.MULTI_AP_SERVICE[supported_service],
+		});
 	}
 
 	return services;
@@ -4407,10 +4434,13 @@ decoder[0x81] = (buf, end) => {
 
 		const searched_service = buf.get('B');
 
-		if (!exists(defs.SEARCHED_SERVICE, searched_service))
+		if (!exists(defs.MULTI_AP_SERVICE, searched_service))
 			return null;
 
-		push(services, searched_service);
+		push(services, {
+			searched_service,
+			searched_service_name: defs.MULTI_AP_SERVICE[searched_service],
+		});
 	}
 
 	return services;
@@ -6379,7 +6409,7 @@ decoder[0xb9] = (buf, end) => {
 decoder[0xba] = (buf, end) => {
 	const dscp_pcp_mapping = [];
 
-	while (buf.pos() + 1 < end) {
+	while (buf.pos() + 1 <= end) {
 		const pcp_value = buf.get('B');
 
 		push(dscp_pcp_mapping, pcp_value);

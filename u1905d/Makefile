@@ -10,6 +10,8 @@ PKG_NAME:=u1905d
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 
+PKG_BUILD_DEPENDS:=ucode
+
 include $(INCLUDE_DIR)/package.mk
 
 
