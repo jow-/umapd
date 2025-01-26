@@ -14,11 +14,19 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+import {
+	create as socket, error as sockerr,
+	AF_PACKET, SOCK_RAW, SOCK_NONBLOCK,
+	SOL_SOCKET, SO_REUSEADDR,
+	SOL_PACKET, PACKET_ADD_MEMBERSHIP,
+	PACKET_MR_MULTICAST, PACKET_MR_PROMISC
+} from 'socket';
+
 import { request as rtrequest, 'const' as rtconst } from 'rtnl';
-import { socket, error as sockerr } from 'umap.socket.raw';
-import { pack } from 'struct';
+import { pack, unpack } from 'struct';
 
 import utils from 'umap.utils';
+import defs from 'umap.defs';
 import log from 'umap.log';
 
 let err;
@@ -28,6 +36,10 @@ function failure(msg) {
 
 	return null;
 }
+
+const ntohs = (pack('H', 0x0102) == '\x02\x01')
+	? v => ((v & 0xff) << 8) | ((v & 0xff00) >> 8)
+	: v => v;
 
 export default {
 	const: {
@@ -45,8 +57,10 @@ export default {
 	},
 
 	create: function (ifname, ethproto, vlan) {
+		let sock, pr = +ethproto;
 		let upper = ifname;
 		let address, bridge;
+		let sa, mr;
 
 		while (true) {
 			let link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: upper });
@@ -69,15 +83,62 @@ export default {
 			break;
 		}
 
-		let sock = socket(ifname, ethproto);
+		// Create a raw socket with non-blocking behavior
+		sock = socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, ntohs(pr));
 
 		if (!sock)
-			return failure(sockerr());
+			return failure("Unable to create raw packet socket");
+
+		// Set SO_REUSEADDR option
+		if (!sock.setopt(SOL_SOCKET, SO_REUSEADDR, true)) {
+			sock.close();
+			return failure("Unable to set SO_REUSEADDR socket option");
+		}
+
+		// Bind the socket to the specified interface
+		sa = {
+			family: AF_PACKET,
+			protocol: pr,
+			address: "00:00:00:00:00:00",
+			interface: ifname
+		};
+
+		if (!sock.bind(sa)) {
+			sock.close();
+			return failure("Unable to bind packet socket");
+		}
+
+		// Enable multicast and promiscuous mode for specific protocols
+		if (pr == this.const.ETH_P_1905 || pr == this.const.ETH_P_LLDP) {
+			mr = {
+				type: PACKET_MR_MULTICAST,
+				interface: ifname,
+				address: (pr == this.const.ETH_P_LLDP)
+					? defs.LLDP_NEAREST_BRIDGE_MAC
+					: defs.IEEE1905_MULTICAST_MAC
+			};
+
+			if (!sock.setopt(SOL_PACKET, PACKET_ADD_MEMBERSHIP, mr)) {
+				sock.close();
+				return failure("Unable to add socket multicast membership");
+			}
+
+			mr = {
+				type: PACKET_MR_PROMISC,
+				interface: ifname
+			};
+
+			if (!sock.setopt(SOL_PACKET, PACKET_ADD_MEMBERSHIP, mr)) {
+				sock.close();
+				return failure("Unable to enable promiscuous mode");
+			}
+		}
 
 		return proto({
-			address, ifname, bridge, vlan,
+			address, ifname, bridge,
 			socket: sock,
-			protocol: ethproto,
+			protocol: pack('!H', ethproto),
+			vlan: vlan ? pack('!HH', this.const.ETH_P_8021Q, vlan) : null,
 			ports: {}
 		}, this);
 	},
@@ -88,21 +149,25 @@ export default {
 			frame;
 
 		if (this.vlan)
-			frame = pack('!6s6sHHH*', dmac, smac, this.const.ETH_P_8021Q, this.vlan, this.protocol, data);
+			frame = [dmac, smac, this.vlan, this.protocol, data];
 		else
-			frame = pack('!6s6sH*', dmac, smac, this.protocol, data);
+			frame = [dmac, smac, this.protocol, data];
 
-		return this.socket.send(dest, frame);
+		return this.socket.sendmsg(frame, null, {
+			family: AF_PACKET,
+			address: dest,
+			interface: this.ifname
+		});
 	},
 
 	recv: function () {
-		let frame = this.socket.recv();
+		let msg = this.socket.recvmsg([6, 6, 2, 1504]);
 
-		if (!frame)
+		if (!msg)
 			return failure(sockerr());
 
-		let dstmac = utils.ether_ntoa(frame, 0);
-		let srcmac = utils.ether_ntoa(frame, 6);
+		let dstmac = utils.ether_ntoa(msg.data[0]);
+		let srcmac = utils.ether_ntoa(msg.data[1]);
 		let ifcmac = this.address;
 		let ifcname = this.ifname;
 
@@ -144,8 +209,8 @@ export default {
 		return [
 			dstmac,
 			srcmac,
-			ord(frame, 12) * 256 + ord(frame, 13),
-			substr(frame, 14),
+			unpack('!H', msg.data[2]),
+			msg.data[3],
 			ifcmac, ifcname
 		];
 	},
