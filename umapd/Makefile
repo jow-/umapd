@@ -27,7 +27,7 @@ define Package/umapd/description
   The umapd daemon is an implementation of the Wi-Fi EasyMesh standard.
 endef
 
-LIBS:=umap/*.so umap/socket/raw.so
+LIBS:=umap/*.so
 MODS:=umap/*.uc umap/tlv/*.uc umap/*.uc
 
 define Package/umapd/install
