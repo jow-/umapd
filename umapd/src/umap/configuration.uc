@@ -68,7 +68,7 @@ export default {
 			const default_ciphers = [];
 
 			const bss = {
-				type: section.type,
+				type: section['.type'],
 				ssid: section.ssid,
 				key: section.key,
 				hidden: (section.hidden in ['1', 'on', 'yes', 'true']),
