@@ -13,4 +13,4 @@ To build and run the container environment, execute the following commands
 within the docker directory:
 
     $ sudo modprobe mac80211_hwsim
-    $ DOCKER_BUILDKIT=1 docker-compose up
+    $ COMPOSE_PROJECT_NAME=umap DOCKER_BUILDKIT=1 docker-compose up
