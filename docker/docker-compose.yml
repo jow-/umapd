@@ -8,7 +8,11 @@ services:
       dockerfile: docker/build/Dockerfile
     command: /sbin/init
     volumes:
-      - ../umapd/src:/src
+      - ../umapd/files/umapd.init:/etc/init.d/umapd
+      - ../umapd/src/umap:/usr/share/ucode/umap
+      - ../umapd/src/umap.uc:/usr/sbin/umapd
+      - ../umapd/src/wifi-apply.uc:/usr/libexec/umap/wifi-apply
+      - ../umapd/src/wps-connect.uc:/usr/sbin/wps-connect
     networks:
       - openwrt_internal
     ports:
@@ -126,7 +130,11 @@ services:
       dockerfile: docker/build/Dockerfile
     command: /sbin/init
     volumes:
-      - ../umapd/src:/src
+      - ../umapd/files/umapd.init:/etc/init.d/umapd
+      - ../umapd/src/umap:/usr/share/ucode/umap
+      - ../umapd/src/umap.uc:/usr/sbin/umapd
+      - ../umapd/src/wifi-apply.uc:/usr/libexec/umap/wifi-apply
+      - ../umapd/src/wps-connect.uc:/usr/sbin/wps-connect
     networks:
       - openwrt_internal
     cap_add:
@@ -175,7 +183,11 @@ services:
       dockerfile: docker/build/Dockerfile
     command: /sbin/init
     volumes:
-      - ../umapd/src:/src
+      - ../umapd/files/umapd.init:/etc/init.d/umapd
+      - ../umapd/src/umap:/usr/share/ucode/umap
+      - ../umapd/src/umap.uc:/usr/sbin/umapd
+      - ../umapd/src/wifi-apply.uc:/usr/libexec/umap/wifi-apply
+      - ../umapd/src/wps-connect.uc:/usr/sbin/wps-connect
     networks:
       - openwrt_internal
     cap_add:
