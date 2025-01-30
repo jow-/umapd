@@ -367,17 +367,17 @@ if ('help' in opts) {
 	);
 }
 
-if (!length(opts.radio)) {
-	log.error('Require at least one radio\n');
-	exit(1);
-}
-else {
+if (length(opts.radio)) {
 	for (let radio in opts.radio) {
 		if (!model.addRadio(radio)) {
 			log.error(`Radio phy '${radio}' unusable - aborting.\n`);
 			exit(1);
 		}
 	}
+}
+else if (!opts.controller) {
+	log.error('Require at least one radio\n');
+	exit(1);
 }
 
 if (!length(opts.interface)) {
