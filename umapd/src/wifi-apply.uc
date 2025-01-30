@@ -31,6 +31,9 @@ ctx.foreach('wireless', 'wifi-iface', (s) => {
 
 // Tear down requested, nothing else to do
 if (length(settings) == 1 && settings[0]?.multi_ap?.tear_down) {
+	ctx.set('wireless', radio, 'disabled', 1);
+	ctx.commit('wireless');
+
 	system(['/sbin/wifi', 'up', radio]);
 	exit(0);
 }
@@ -73,8 +76,37 @@ for (let bss in settings) {
 
 	if (bss.encryption_types & (WPS_ENCR_TKIP | WPS_ENCR_AES))
 		ctx.set('wireless', sid, 'key', bss.network_key);
+
+	// Set multi ap operation mode
+	let multi_ap_mode = 0;
+
+	if (bss.multi_ap?.is_backhaul_bss)
+		multi_ap_mode |= 1;
+
+	if (bss.multi_ap?.is_fronthaul_bss) {
+		multi_ap_mode |= 2;
+
+		for (let other_bss in settings) {
+			if (other_bss === bss)
+				continue;
+
+			if (!other_bss.multi_ap?.is_backhaul_bss)
+				continue;
+
+			if (bss.authentication_types & (WPS_AUTH_WPAPSK | WPS_AUTH_WPA2PSK))
+				ctx.set('wireless', sid, 'wps_pushbutton', 1);
+
+			ctx.set('wireless', sid, 'multi_ap_backhaul_ssid', other_bss.ssid);
+
+			if (other_bss.encryption_types & (WPS_ENCR_TKIP | WPS_ENCR_AES))
+				ctx.set('wireless', sid, 'multi_ap_backhaul_key', other_bss.network_key);
+		}
+	}
+
+	ctx.set('wireless', sid, 'multi_ap', multi_ap_mode);
 }
 
+ctx.set('wireless', radio, 'disabled', 0);
 ctx.commit('wireless');
 
 system(['/sbin/wifi', 'up', radio]);
