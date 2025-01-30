@@ -1,5 +1,7 @@
 #syntax=docker/dockerfile:1
 
+ARG BUILD_CONTROLLER=0
+
 FROM ubuntu:24.04 AS builder
 
 RUN apt-get update && apt-get install -y \
@@ -12,7 +14,7 @@ RUN apt-get update && apt-get install -y \
 		rsync \
 		unzip \
 		wget \
-    && rm -rf /var/lib/apt/lists/*
+	&& rm -rf /var/lib/apt/lists/*
 
 USER ubuntu
 WORKDIR /build
@@ -34,9 +36,8 @@ COPY --chown=ubuntu ./umapd/ /src/umapd/
 COPY --chown=ubuntu ./luci-app-umap/ /src/luci-app-umap/
 
 RUN ./scripts/feeds update local \
-	&& ./scripts/feeds install -d y -p local ucode \
-	&& ./scripts/feeds install -d y -p local umapd \
-	&& ./scripts/feeds install -d y -p local luci-app-umap \
+	&& ./scripts/feeds install -d y -p local \
+		ucode umapd umap-agent umap-controller luci-app-umap \
 	&& make defconfig \
 	&& make -j $(nproc) package/ucode/compile package/umapd/compile package/luci-app-umap/compile V=sc
 
@@ -58,6 +59,8 @@ COPY --from=builder /build/bin/packages/x86_64/local/ucode-mod-ubus_*.ipk /root/
 COPY --from=builder /build/bin/packages/x86_64/local/ucode-mod-uci_*.ipk /root/
 COPY --from=builder /build/bin/packages/x86_64/local/ucode-mod-uloop_*.ipk /root/
 COPY --from=builder /build/bin/packages/x86_64/local/umapd_*.ipk /root/
+COPY --from=builder /build/bin/packages/x86_64/local/umap-agent_*.ipk /root/
+COPY --from=builder /build/bin/packages/x86_64/local/umap-controller_*.ipk /root/
 COPY --from=builder /build/bin/packages/x86_64/local/luci-app-umap_*.ipk /root/
 
 RUN mkdir /var/lock && \
@@ -65,6 +68,7 @@ RUN mkdir /var/lock && \
 	opkg update && \
 	opkg install procd kmod-cfg80211 iw-full hostapd-openssl hostapd-utils wpa-supplicant-openssl && \
 	rm -r /tmp/opkg-lists && \
+	{ [ ${BUILD_CONTROLLER} = 1 ] || rm /root/umap-controller_*.ipk; } && \
 	opkg install --force-reinstall --force-downgrade /root/*.ipk && \
 	rm -r /var/lock && \
 	rm /root/*.ipk
