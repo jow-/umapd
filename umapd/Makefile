@@ -20,7 +20,7 @@ define Package/umapd
   CATEGORY:=Network
   TITLE:=Wireless EasyMesh daemon
   MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
-  DEPENDS:=libopenssl
+  DEPENDS:=+libopenssl
 endef
 
 define Package/umapd/description
