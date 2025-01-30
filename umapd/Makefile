@@ -45,11 +45,50 @@ define Package/umapd/install
 			$(addprefix $(PKG_BUILD_DIR)/,$(file)) \
 			$(1)/usr/share/ucode/$(dir $(file)); )
 
-	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/init.d $(1)/etc/config $(1)/usr/libexec/umap
+	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config $(1)/usr/libexec/umap
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/umap.uc $(1)/usr/sbin/umapd
-	$(INSTALL_BIN) ./files/umapd.init $(1)/etc/init.d/umapd
 	$(INSTALL_CONF) ./files/umapd.config $(1)/etc/config/umapd
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wifi-apply.uc $(1)/usr/libexec/umap/wifi-apply
 endef
 
+define Package/umap-agent
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=Wireless EasyMesh agent
+  MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
+  DEPENDS:=+umapd
+endef
+
+define Package/umap-agent/description
+  This package bundles support and integration files to run the EasyMesh
+  daemon as agent instance.
+endef
+
+define Package/umap-agent/install
+	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/umapd.agent.init $(1)/etc/init.d/umap-agent
+	$(INSTALL_DATA) ./files/umapd.agent.defaults $(1)/etc/uci-defaults/umap-agent
+endef
+
+define Package/umap-controller
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=Wireless EasyMesh controller
+  MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
+  DEPENDS:=+umapd
+endef
+
+define Package/umap-controller/description
+  This package bundles support and integration files to run the EasyMesh
+  daemon as network controller.
+endef
+
+define Package/umap-controller/install
+	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/umapd.controller.init $(1)/etc/init.d/umap-controller
+	$(INSTALL_DATA) ./files/umapd.controller.defaults $(1)/etc/uci-defaults/umap-controller
+endef
+
 $(eval $(call BuildPackage,umapd))
+$(eval $(call BuildPackage,umap-agent))
+$(eval $(call BuildPackage,umap-controller))

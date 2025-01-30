@@ -1,0 +1,33 @@
+#!/bin/sh
+
+uci -q get network.umapctrl | grep -q interface || {
+    uci set network.umapctrl=interface
+    uci set network.umapctrl.proto=static
+    uci set network.umapctrl.device=umapctrl
+
+    uci add network device
+    uci set network.@device[-1].type=veth
+    uci set network.@device[-1].name=umapctrl
+    uci set network.@device[-1].peer_name=umapagent
+
+    for interface in $(uci -q get umapd.@agent[0].interface); do
+        if [ $(uci -q get "network.$interface") = interface ]; then
+            ifname=$(uci -q get "network.$interface.device")
+            device=$(uci -q show network | grep -E "^network\.@device\[[0-9]+\].name='$ifname'$" | cut -d. -f2)
+
+            if [ $(uci -q get "network.$device") = device ] && \
+               [ $(uci -q get "network.$device.type") = bridge ];
+            then
+                uci add_list network.$device.ports=umapagent
+            fi
+        fi
+    done
+
+    uci commit network
+}
+
+uci -q get umapd.@controller[0] | grep -q controller || {
+    uci add umapd controller
+    uci add_list umapd.@controller[0].interface=umapctrl
+    uci commit umapd
+}

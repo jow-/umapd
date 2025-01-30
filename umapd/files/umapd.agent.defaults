@@ -1,0 +1,34 @@
+#!/bin/sh
+
+uci -q get network.easymesh | grep -q interface || {
+    uci set network.easymesh=interface
+    uci set network.easymesh.proto=static
+    uci set network.easymesh.device=easymesh0
+
+    uci add network device
+    uci set network.@device[-1].type=bridge
+    uci set network.@device[-1].name=easymesh0
+    uci set network.@device[-1].stp=1
+
+    if [ -x /etc/init.d/umap-controller ]; then
+        uci add_list network.@device[-1].port=umapagent
+    else
+        uci set network.@device[-1].bridge_empty=1
+    fi
+
+    uci commit network
+}
+
+uci -q get umapd.@agent[0] | grep -q agent || {
+    uci add umapd agent
+    uci add_list umapd.@agent[0].interface=easymesh
+
+    radio_num=0
+
+    while uci -q get wireless.@wifi-device[$radio_num] | grep -q wifi-device; do
+        uci add_list umapd.@agent[0].radio=$(uci show wireless.@wifi-device[$radio_num].type | cut -d. -f2)
+        radio_num=$((radio_num + 1))
+    done
+
+    uci commit umapd
+}

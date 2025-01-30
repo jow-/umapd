@@ -1,13 +1,13 @@
 #!/bin/sh /etc/rc.common
 
-START=20
+START=60
 
 USE_PROCD=1
-NAME=umapd
+NAME=umap-controller
 PROG=/usr/sbin/umapd
 
 start_service() {
-	local interfaces=$(uci -q get umapd.@umapd[0].interfaces)
+	local interfaces=$(uci -q get umapd.@controller[0].interface)
 	local devices
 
 	. /lib/functions/network.sh
@@ -25,7 +25,17 @@ start_service() {
 	}
 
 	procd_open_instance
-	procd_set_param command "$PROG" $devices
+
+ 	procd_set_param respawn 30 3 0
+	procd_set_param stderr 1
+	procd_set_param stdout 1
+
+	procd_set_param command "$PROG" --controller
+
+    for ifname in $devices; do
+        procd_append_param command --interface "$ifname"
+    done
+
 	procd_set_param respawn
 	procd_close_instance
 }
