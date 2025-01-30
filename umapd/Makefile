@@ -20,7 +20,9 @@ define Package/umapd
   CATEGORY:=Network
   TITLE:=Wireless EasyMesh daemon
   MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
-  DEPENDS:=+libopenssl
+  DEPENDS:=+libopenssl +ucode \
+	+ucode-mod-fs +ucode-mod-nl80211 +ucode-mod-rtnl +ucode-mod-socket \
+	+ucode-mod-struct +ucode-mod-ubus +ucode-mod-uci +ucode-mod-uloop
 endef
 
 define Package/umapd/description
