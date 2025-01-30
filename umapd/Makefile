@@ -28,7 +28,7 @@ define Package/umapd/description
 endef
 
 LIBS:=umap/*.so umap/socket/raw.so
-MODS:=umap/*.uc umap/tlv/*.uc umap/*.uc
+MODS:=umap/*.uc umap/tlv/*.uc umap/proto/*.uc umap/*.uc
 
 define Package/umapd/install
 	$(foreach dir,$(dir $(LIBS)),$(INSTALL_DIR) $(1)/usr/lib/ucode/$(dir); )
