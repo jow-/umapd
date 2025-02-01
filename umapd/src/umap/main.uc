@@ -77,7 +77,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
             query = cmdu.create(defs.MSG_TOPOLOGY_DISCOVERY);
             query.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
             query.add_tlv(defs.TLV_MAC_ADDRESS, i1905lif.address);
-            query.send(i1905lif.i1905txsock, i1905lif.address, al_mac);
+            query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
         }
 
         let iface = dev.addInterface(if_mac);
@@ -88,16 +88,16 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
         // query device information
         query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
-        query.send(i1905lif.i1905txsock, i1905lif.address, al_mac);
+        query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
 
         // query link metrics
         query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
         query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
-        query.send(i1905lif.i1905txsock, i1905lif.address, al_mac);
+        query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
 
         // query higher layer info
         query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
-        query.send(i1905lif.i1905txsock, i1905lif.address, al_mac);
+        query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
     }
     else if (msg.type == defs.MSG_TOPOLOGY_QUERY) {
         let i1905dev = model.lookupDevice(srcmac);
@@ -119,7 +119,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
             reply.add_tlv_raw(tlv.type, tlv.payload);
         }
 
-        reply.send(i1905lif.i1905txsock, dstmac, i1905dev.al_address);
+        reply.send(i1905lif.i1905sock, dstmac, i1905dev.al_address);
 
         i1905dev.updateTLVs(msg.get_tlvs_raw(defs.TLV_MULTI_AP_PROFILE, defs.TLV_PROFILE_2_AP_CAPABILITY));
     }
@@ -148,7 +148,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
                 reply.add_tlv_raw(tlv.type, tlv.payload);
         }
 
-        reply.send(i1905lif.i1905txsock, dstmac, al_mac);
+        reply.send(i1905lif.i1905sock, dstmac, al_mac);
     }
     else if (msg.type == defs.MSG_TOPOLOGY_RESPONSE) {
         let devinfo = msg.get_tlv(defs.TLV_IEEE1905_DEVICE_INFORMATION);
@@ -198,7 +198,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
         for (let tlv in model.getLocalDevice().getTLVs(defs.TLV_IEEE1905_PROFILE_VERSION, defs.TLV_DEVICE_IDENTIFICATION, defs.TLV_CONTROL_URL, defs.TLV_IPV4, defs.TLV_IPV6))
             reply.add_tlv_raw(tlv.type, tlv.payload);
 
-        reply.send(i1905lif.i1905txsock, dstmac, al_mac);
+        reply.send(i1905lif.i1905sock, dstmac, al_mac);
     }
     else if (msg.type == defs.MSG_HIGHER_LAYER_RESPONSE) {
         let i1905dev = model.lookupDevice(al_mac);
@@ -222,10 +222,10 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
     if (msg.flags & defs.CMDU_F_ISRELAY) {
         // unknown origin
-        if (!al_mac) {
-            log.warn(`Not relaying multicast message without AL MAC TLV`);
-            return;
-        }
+        //if (!al_mac) {
+        //    log.warn(`Not relaying multicast message without AL MAC TLV`);
+        //    return;
+        //}
 
         // already sent by us
         if (al_mac == model.address && msg.mid < cmdu.mid_counter) {
@@ -234,8 +234,8 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
         }
 
         for (let i1905lif2 in model.getLocalInterfaces())
-            if (i1905lif2.i1905rxsock != i1905lif.i1905rxsock)
-                msg.send(i1905lif2.i1905txsock, i1905lif2.address, defs.IEEE1905_MULTICAST_MAC);
+            if (i1905lif2.i1905sock != i1905lif.i1905sock)
+                msg.send(i1905lif2.i1905sock, i1905lif2.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
     }
 }
 
@@ -248,17 +248,17 @@ function handle_i1905_input(flags) {
         if (!payload)
             break;
 
-        let i1905lif = model.lookupLocalInterface(payload[5] ?? sock);
+        let i1905lif = model.lookupLocalInterface(sock);
 
         if (!i1905lif) {
-            log.warn('Received CMDU on unknown interface');
+            log.warn(`Received CMDU on unknown interface (${sock.ifname})`);
             continue;
         }
 
         let msg = cmdu.parse(payload[1], payload[3]);
 
         if (!msg)
-            log.debug('RX %-8s: %s > %s : Invalid CMDU', payload[5], payload[1], payload[0]);
+            log.debug('RX %-8s: %s > %s : Invalid CMDU', sock.ifname, payload[1], payload[0]);
         else if (msg.is_complete())
             handle_i1905_cmdu(i1905lif, payload[0], payload[1], msg);
     }
@@ -273,7 +273,6 @@ function handle_lldp_input(flags) {
         if (!payload)
             break;
 
-        let i1905lif = model.lookupLocalInterface(payload[5] ?? sock);
         let msg = lldp.parse(payload[3]);
 
         if (!msg) {
@@ -308,14 +307,14 @@ function emit_topology_discovery() {
     for (let i1905lif in model.getLocalInterfaces()) {
         let lldpdu = lldp.create(model.address, i1905lif.address, 180);
 
-        lldpdu.send(i1905lif.lldptxsock);
+        lldpdu.send(i1905lif.lldpsock);
 
         let msg = cmdu.create(defs.MSG_TOPOLOGY_DISCOVERY);
 
         msg.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
         msg.add_tlv(defs.TLV_MAC_ADDRESS, i1905lif.address);
 
-        msg.send(i1905lif.i1905txsock, model.address, defs.IEEE1905_MULTICAST_MAC);
+        msg.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC);
 
     }
 }
@@ -331,7 +330,7 @@ function emit_topology_notification() {
     reply.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
 
     for (let i1905lif in model.getLocalInterfaces())
-        reply.send(i1905lif.i1905txsock, model.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
+        reply.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
 
     model.topologyChanged = false;
 }
@@ -341,6 +340,7 @@ export default function () {
 
     let opts = sys.getopt([
         'interface|iface|i=s*',
+        'bridge|b=s*',
         'radio|phy|r=s*',
         'controller',
         'mac=s',
@@ -355,6 +355,9 @@ export default function () {
             '\n',
             '--interface IFNAME\n',
             '  Use the given network interface as backhaul link\n',
+            '\n',
+            '--bridge BRIDGE\n',
+            '  Automatically pick up backhaul links from ports of the given bridge\n',
             '\n',
             '--radio PHYNAME\n',
             '  Manage the given radio identified by the wiphy name\n',
@@ -380,26 +383,48 @@ export default function () {
         return 1;
     }
 
-    if (!length(opts.interface)) {
-        log.error('Require at least one interface\n');
+    if (!length(opts.interface) && !length(opts.bridge)) {
+        log.error('Require at least one interface or bridge\n');
         return 1;
     }
-    else {
-        for (let ifname in opts.interface) {
-            let ifc = model.addLocalInterface(ifname);
-            if (ifc) {
-                uloop.handle(ifc.i1905rxsock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
-                uloop.handle(ifc.lldprxsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+
+    // FIXME: rework this
+    model.ubus = ubus;
+
+    for (let ifname in opts.interface) {
+        let ifc = model.addLocalInterface(ifname);
+        if (ifc) {
+            uloop.handle(ifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+            uloop.handle(ifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+        }
+        else {
+            log.error(`Unable to initialize interface ${ifname}: ${socket.error()}`);
+            return 1;
+        }
+    }
+
+    for (let bridge in opts.bridge) {
+        try {
+            let br = model.addLocalBridge(bridge);
+            for (let ifname, portifc in br?.ports) {
+                uloop.handle(portifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+                uloop.handle(portifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
             }
-            else {
-                log.error(`Unable to initialize interface ${ifname}: ${socket.error()}`);
-                return 1;
-            }
+        }
+        catch (e) {
+            log.error(`Unable to initialize bridge ${bridge}: ${e}`);
+            return 1;
         }
     }
 
     model.isController = !!opts.controller;
     model.initializeAddress();
+    model.observeDeviceChanges(function (portifc, added) {
+        if (added) {
+            uloop.handle(portifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+            uloop.handle(portifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+        }
+    });
 
     if (!ubus.publish())
         log.warn(`Unable to publish ieee1905 object: ${ubus.error()}`);
@@ -414,4 +439,4 @@ export default function () {
     uloop.run();
 
     return 0;
-}
+};

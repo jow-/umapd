@@ -66,7 +66,7 @@ COPY --from=builder /build/bin/packages/x86_64/local/luci-app-umap_*.ipk /root/
 RUN mkdir /var/lock && \
 	opkg remove procd-ujail && \
 	opkg update && \
-	opkg install procd kmod-cfg80211 iw-full hostapd-openssl hostapd-utils wpa-supplicant-openssl && \
+	opkg install procd kmod-cfg80211 iw-full hostapd-openssl hostapd-utils wpa-supplicant-openssl tc-tiny && \
 	rm -r /tmp/opkg-lists && \
 	{ [ ${BUILD_CONTROLLER} = 1 ] || rm /root/umap-controller_*.ipk; } && \
 	opkg install --force-reinstall --force-downgrade /root/*.ipk && \

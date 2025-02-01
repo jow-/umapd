@@ -17,17 +17,16 @@
 import {
 	create as socket, error as sockerr,
 	AF_PACKET, SOCK_RAW, SOCK_NONBLOCK,
-	SOL_SOCKET, SO_REUSEADDR,
+	SOL_SOCKET, SO_REUSEADDR, SO_ATTACH_FILTER,
 	SOL_PACKET, PACKET_ADD_MEMBERSHIP,
 	PACKET_MR_MULTICAST, PACKET_MR_PROMISC
 } from 'socket';
 
 import { request as rtrequest, 'const' as rtconst } from 'rtnl';
-import { pack, unpack } from 'struct';
+import { pack } from 'struct';
 
 import utils from 'umap.utils';
 import defs from 'umap.defs';
-import log from 'umap.log';
 
 let err;
 
@@ -37,15 +36,21 @@ function failure(msg) {
 	return null;
 }
 
-const ntohs = (pack('H', 0x0102) == '\x02\x01')
-	? v => ((v & 0xff) << 8) | ((v & 0xff00) >> 8)
-	: v => v;
+function sockfail(sock, msg) {
+	const serr = sock.error();
+
+	sock.close();
+	err = `${msg}: ${serr}`;
+
+	return null;
+}
 
 export default {
 	const: {
 		ETH_P_8021Q: 0x8100,
 		ETH_P_LLDP: 0x88cc,
 		ETH_P_1905: 0x893a,
+		ETH_P_ALL: 0x0003,
 	},
 
 	error: function () {
@@ -57,10 +62,8 @@ export default {
 	},
 
 	create: function (ifname, ethproto, vlan) {
-		let sock, pr = +ethproto;
 		let upper = ifname;
 		let address, bridge;
-		let sa, mr;
 
 		while (true) {
 			let link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: upper });
@@ -83,55 +86,98 @@ export default {
 			break;
 		}
 
-		// Create a raw socket with non-blocking behavior
-		sock = socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, ntohs(pr));
+		let sock = socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
 
 		if (!sock)
-			return failure("Unable to create raw packet socket");
+			return failure(`Unable to create raw packet socket: ${sockerr()}`);
 
-		// Set SO_REUSEADDR option
-		if (!sock.setopt(SOL_SOCKET, SO_REUSEADDR, true)) {
-			sock.close();
-			return failure("Unable to set SO_REUSEADDR socket option");
-		}
+		if (!sock.setopt(SOL_SOCKET, SO_REUSEADDR, true))
+			return sockfail(sock, `Unable to set SO_REUSEADDR option`);
 
-		// Bind the socket to the specified interface
-		sa = {
+		let sa = {
 			family: AF_PACKET,
-			protocol: pr,
-			address: "00:00:00:00:00:00",
+			protocol: ethproto,
+			address: "",
 			interface: ifname
 		};
 
-		if (!sock.bind(sa)) {
-			sock.close();
-			return failure("Unable to bind packet socket");
+		/* If the interface requires VLAN awareness (which should only be the
+		 * case for tagged bridge ports being part of a bridge VLAN) we need
+		 * to do extra work to properly deal with frame reception:
+		 *
+		 *  - Enable reception of all protocols with ETH_P_ALL
+		 *  - Install BPF filter to discard non-VLAN, wrong ethertype frames
+		 *
+		 * In all other cases (binding to a non-bridge port tagged interface,
+		 * binding to untagged bridge ports) the kernel takes care of dealing
+		 * with VLAN decapsulation.
+		 */
+		if (vlan) {
+			const prog = {
+				filter: [
+					0x30, 0, 0, 0xfffff030, // Load VLAN_TAG_PRESENT flag
+					0x15, 4, 0, 0x00000001, // If present skip fallback check
+					0x28, 0, 0, 0x0000000c, // Load ethertype at offset 12
+					0x15, 2, 0, 0x00008100, // 802.1Q ?
+					0x15, 1, 0, 0x000088a8, // QinQ ?
+					0x15, 0, 10, 0x00009100, // QinQ ?
+					0x30, 0, 0, 0xfffff030, // Reload VLAN_TAG_PRESENT flag
+					0x15, 0, 2, 0x00000001, // If not present load tag from offset 14
+					0x30, 0, 0, 0xfffff02c, // Load VLAN tag from skb info
+					0x05, 0, 0, 0x00000001, // Skip next instruction
+					0x28, 0, 0, 0x0000000e, // Load VLAN tag from offset 14
+					0x54, 0, 0, 0x00000fff, // Mask priority bits
+					0x15, 0, 3, vlan, // VLAN ID matches?
+					0x28, 0, 0, 0xfffff000, // Load protocol from skb info
+					0x15, 0, 1, ethproto, // Protocol matches?
+					0x6, 0, 0, 0x00002000, // Return true
+					0x6, 0, 0, 0x00000000, // Drop
+				]
+			};
+
+			if (!sock.setopt(SOL_SOCKET, SO_ATTACH_FILTER, prog))
+				return sockfail(sock, `Unable to set socket filter`);
+
+			sa.protocol = this.const.ETH_P_ALL;
+		}
+		else {
+			const prog = {
+				filter: [
+					0x28, 0, 0, 0x0000000c, // Load ethertype at offset 12
+					0x15, 0, 1, ethproto, // Protocol matches?
+					0x6, 0, 0, 0x00002000, // Return true
+					0x6, 0, 0, 0x00000000, // Drop
+				]
+			};
+
+			if (!sock.setopt(SOL_SOCKET, SO_ATTACH_FILTER, prog))
+				return sockfail(sock, `Unable to set socket filter`);
+
+			sa.protocol = this.const.ETH_P_ALL;
 		}
 
-		// Enable multicast and promiscuous mode for specific protocols
-		if (pr == this.const.ETH_P_1905 || pr == this.const.ETH_P_LLDP) {
-			mr = {
+		if (!sock.bind(sa))
+			return sockfail(sock, `Unable to bind packet socket`);
+
+		if (ethproto == this.const.ETH_P_1905 || ethproto == this.const.ETH_P_LLDP) {
+			let mr = {
 				type: PACKET_MR_MULTICAST,
 				interface: ifname,
-				address: (pr == this.const.ETH_P_LLDP)
+				address: (ethproto == this.const.ETH_P_LLDP)
 					? defs.LLDP_NEAREST_BRIDGE_MAC
 					: defs.IEEE1905_MULTICAST_MAC
 			};
 
-			if (!sock.setopt(SOL_PACKET, PACKET_ADD_MEMBERSHIP, mr)) {
-				sock.close();
-				return failure("Unable to add socket multicast membership");
-			}
+			if (!sock.setopt(SOL_PACKET, PACKET_ADD_MEMBERSHIP, mr))
+				return sockfail(sock, "Unable to add socket multicast membership");
 
 			mr = {
 				type: PACKET_MR_PROMISC,
 				interface: ifname
 			};
 
-			if (!sock.setopt(SOL_PACKET, PACKET_ADD_MEMBERSHIP, mr)) {
-				sock.close();
-				return failure("Unable to enable promiscuous mode");
-			}
+			if (!sock.setopt(SOL_PACKET, PACKET_ADD_MEMBERSHIP, mr))
+				return sockfail(sock, "Unable to enable promiscuous mode");
 		}
 
 		return proto({
@@ -166,52 +212,11 @@ export default {
 		if (!msg)
 			return failure(sockerr());
 
-		let dstmac = utils.ether_ntoa(msg.data[0]);
-		let srcmac = utils.ether_ntoa(msg.data[1]);
-		let ifcmac = this.address;
-		let ifcname = this.ifname;
-
-		/* Determine RX interface */
-		let rxdev = this.ifname;
-
-		if (this.bridge) {
-			let search = {
-				family: rtconst.AF_BRIDGE,
-				master: this.bridge,
-				lladdr: srcmac
-			};
-
-			if (this.vlan)
-				search.vlan = this.vlan;
-
-			let neigh = rtrequest(rtconst.RTM_GETNEIGH, 0, search);
-
-			if (neigh) {
-				let rxdev = ifcname = neigh.dev;
-
-				if (!this.ports[rxdev]) {
-					let link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: rxdev });
-
-					if (link)
-						ifcmac = this.ports[rxdev] = link.address;
-					else
-						log.warn(`Failed to query link information for bridge ${this.bridge} port ${rxdev}: ${rtnl.error()}`);
-				}
-				else {
-					ifcmac = this.ports[rxdev];
-				}
-			}
-			else {
-				log.warn(`No FDB entry for source MAC ${srcmac} on bridge ${this.bridge}`);
-			}
-		}
-
 		return [
-			dstmac,
-			srcmac,
-			unpack('!H', msg.data[2]),
-			msg.data[3],
-			ifcmac, ifcname
+			utils.ether_ntoa(msg.data[0]),
+			utils.ether_ntoa(msg.data[1]),
+			(ord(msg.data[2], 0) << 8) | ord(msg.data[2], 1),
+			msg.data[3]
 		];
 	},
 

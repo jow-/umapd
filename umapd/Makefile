@@ -56,7 +56,7 @@ define Package/umap-agent
   CATEGORY:=Network
   TITLE:=Wireless EasyMesh agent
   MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
-  DEPENDS:=+umapd
+  DEPENDS:=+umapd +tc-tiny
 endef
 
 define Package/umap-agent/description

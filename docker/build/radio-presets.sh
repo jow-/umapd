@@ -1,5 +1,7 @@
 #!/bin/sh
 
+sleep 1
+
 echo "" > /etc/config/wireless
 
 /sbin/wifi config
@@ -31,7 +33,10 @@ while uci -q set "wireless.@wifi-device[$radio_num].country=US"; do
     uci set "wireless.@wifi-device[$radio_num].rx_stbc=0"
     uci set "wireless.@wifi-device[$radio_num].max_amsdu=0"
 
-    uci add_list "umapd.@agent[0].radio=$phy"
+    case " $(uci get umapd.@agent[0].radio) " in
+        *" $phy "*) : ;;
+        *) uci add_list "umapd.@agent[0].radio=$phy" ;;
+    esac
 
     radio_num=$((radio_num + 1))
 done
