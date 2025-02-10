@@ -37,7 +37,7 @@ const I1905UbusProcedures = {
 				push(interfaces, {
 					address: i1905lif.address,
 					type,
-					type_name: defs.MEDIA_TYPES[type] ?? 'Unknown/Reserved',
+					type_name: defs.MEDIA_TYPE[type] ?? 'Unknown/Reserved',
 					bridge: i1905lif.isBridged()
 				});
 			}
