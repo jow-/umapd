@@ -21,7 +21,7 @@ uci -q get network.easymesh | grep -q interface || {
 
 uci -q get umapd.@agent[0] | grep -q agent || {
     uci add umapd agent
-    uci add_list umapd.@agent[0].interface=easymesh
+    uci add_list umapd.@agent[0].bridge=easymesh0
 
     radio_num=0
 

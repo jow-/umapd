@@ -95,7 +95,7 @@ const IAgentSession = {
 		push(this.midsInFlight, msg.mid);
 
 		for (let i1905lif in model.getLocalInterfaces())
-			msg.send(i1905lif.i1905txsock, model.address, defs.IEEE1905_MULTICAST_MAC);
+			msg.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
 	},
 
 	sendApAutoconfigurationWscM1: function () {
@@ -129,7 +129,7 @@ const IAgentSession = {
 
 		push(this.midsInFlight, msg.mid);
 
-		msg.send(this.controller.i1905lif.i1905txsock,
+		msg.send(this.controller.i1905lif.i1905sock,
 			model.address, this.controller.address);
 	},
 
@@ -337,8 +337,8 @@ const IProtoAutoConf = {
 
 			reply.add_tlv(defs.TLV_CONTROLLER_CAPABILITY, true);
 
-			//reply.send(i1905lif.i1905txsock, dstmac, srcmac);
-			reply.send(i1905lif.i1905txsock, model.address, sender.al_address);
+			//reply.send(i1905lif.i1905sock, dstmac, srcmac);
+			reply.send(i1905lif.i1905sock, model.address, sender.al_address);
 		}
 		else if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_WSC) {
 			log.debug(`autoconf: received AP Auto-Configuration WSC message`);
@@ -410,7 +410,7 @@ const IProtoAutoConf = {
 				reply.add_tlv(defs.TLV_WSC, m2);
 			}
 
-			reply.send(i1905lif.i1905txsock, model.address, sender.al_address);
+			reply.send(i1905lif.i1905sock, model.address, sender.al_address);
 		}
 	},
 

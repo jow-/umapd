@@ -15,15 +15,12 @@
  */
 
 import { request as wlrequest, 'const' as wlconst } from 'nl80211';
-import { request as rtrequest, 'const' as rtconst } from 'rtnl';
+import { request as rtrequest, listener as rtlistener, error as rterror, 'const' as rtconst } from 'rtnl';
 import { pack, unpack, buffer } from 'struct';
-import { open, readfile } from 'fs';
+import { access, open, readfile } from 'fs';
 
 import socket from 'umap.socket';
-import utils from 'umap.utils';
-//import cmdu from 'umap.cmdu';
 import * as codec from 'umap.tlv.codec';
-//import tlv from 'umap.tlv';
 import log from 'umap.log';
 import defs from 'umap.defs';
 
@@ -263,7 +260,7 @@ function resolve_bridge_ports(ifname) {
 		}
 	}
 	else {
-		push(links, { ifname: link.ifname, address: link.address });
+		push(links, { ifname, address: link.address });
 	}
 
 	return links;
@@ -311,14 +308,14 @@ const I1905RemoteInterface = proto({
 }, I1905Entity);
 
 const I1905LocalInterface = proto({
-	new: function (link, i1905rxsock, i1905txsock, lldprxsock, lldptxsock) {
+	new: function (link, i1905sock, lldpsock) {
 		log.info(`Using local interface ${link.ifname} (${link.address}${link.vlan ? `, VLAN ${link.vlan}` : ''})`);
 
 		return proto({
 			address: link.address,
 			ifname: link.ifname,
-			i1905rxsock, i1905txsock,
-			lldprxsock, lldptxsock,
+			i1905sock,
+			lldpsock,
 			neighbors: []
 		}, this);
 	},
@@ -545,7 +542,7 @@ const I1905LocalInterface = proto({
 		if (!refresh && this.info)
 			return this.info;
 
-		let ifname = this.i1905txsock.ifname,
+		let ifname = this.i1905sock.ifname,
 			link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: ifname }),
 			wifi = wlrequest(wlconst.NL80211_CMD_GET_INTERFACE, 0, { dev: ifname }),
 			wphy = wlrequest(wlconst.NL80211_CMD_GET_WIPHY, 0, { dev: ifname }),
@@ -635,6 +632,85 @@ const I1905LocalInterface = proto({
 		}
 
 		return (changed != 0);
+	}
+}, I1905Entity);
+
+const I1905LocalBridge = proto({
+	new: function (brname) {
+		let bridge, vlan, link;
+		let upper = brname;
+
+		while (true) {
+			link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: upper });
+
+			if (!link)
+				return die(`Failed to get link information for device ${upper}: ${rterror()}`);
+
+			switch (link.linkinfo?.type) {
+				case 'vlan':
+					upper = link.link;
+					vlan = link.linkinfo.id;
+					continue;
+
+				case 'bridge':
+					bridge = upper;
+					break;
+			}
+
+			break;
+		}
+
+		if (!bridge)
+			die(`Network device ${brname} is not a bridge interface`);
+
+		log.info(`Observing local bridge ${link.ifname} (${link.address}${vlan ? `, VLAN ${vlan}` : ''})`);
+
+		let br = proto({
+			brname,
+			vlan,
+			link,
+			ports: {}
+		}, this);
+
+		for (let link in resolve_bridge_ports(brname))
+			br.addPort(link, link.vlan != null);
+
+		return br;
+	},
+
+	addPort: function (link, tagged) {
+		if (exists(this.ports, link.ifname))
+			die(`Device ${link.ifname} is already registered as bridge ${this.brname} port`);
+
+		let i1905sock, lldpsock;
+
+		if (!(i1905sock = socket.create(link.ifname, socket.const.ETH_P_1905, tagged ? this.vlan : null)))
+			die(`Unable to spawn IEEE 1905 TX socket on ${link.ifname}: ${socket.error()}`);
+
+		if (!(lldpsock = socket.create(link.ifname, socket.const.ETH_P_LLDP, tagged ? this.vlan : null)))
+			die(`Unable to spawn LLDP TX socket on ${link.ifname}: ${socket.error()}`);
+
+		if (access('/sbin/tc', 'x')) {
+			const rule =
+				`dev '${link.ifname}' pref 1 protocol ${socket.const.ETH_P_1905} ingress ` +
+				`u32 match u16 0x0180 0xffff at -14 match u32 0xc2000013 0xffffffff at -12 ` +
+				`action drop`;
+
+			system(`/sbin/tc filter del ${rule} 2>/dev/null`);
+			system(`/sbin/tc qdisc add dev '${link.ifname}' clsact 2>/dev/null`);
+			system(`/sbin/tc filter add ${rule}`);
+		}
+
+		return (this.ports[link.ifname] = I1905LocalInterface.new(link, i1905sock, lldpsock));
+	},
+
+	deletePort: function (ifname) {
+		if (!exists(this.ports, ifname))
+			return false;
+
+		delete this.ports[ifname];
+
+		return true;
 	}
 }, I1905Entity);
 
@@ -1009,6 +1085,7 @@ const I1905Device = proto({
 export default proto({
 	address: '00:00:00:00:00:00',
 	interfaces: {},
+	bridges: {},
 	devices: [],
 	radios: [],
 	topologyChanged: false,
@@ -1044,46 +1121,74 @@ export default proto({
 		log.info(`Using AL MAC address: ${this.address}`);
 	},
 
-	addLocalInterface: function (ifname) {
-		let upper = ifname;
-		let vlan;
+	observeDeviceChanges: function (port_change_cb) {
+		const interfaces = this.interfaces;
+		const bridges = this.bridges;
+		const ubus = this.ubus;
 
-		while (true) {
-			let link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: upper });
+		rtlistener(function (rtevent) {
+			//try {
+			if (rtevent.cmd == rtconst.RTM_NEWLINK) {
+				let brname = rtevent.msg.master;
+				let brvlan = rtevent.msg.af_spec?.bridge?.bridge_vlan_info?.[0]?.vid;
 
-			if (!link)
-				return null;
+				if (brvlan != null)
+					brname += `.${brvlan}`;
 
-			switch (link.linkinfo?.type) {
-				case 'vlan':
-					upper = link.link;
-					vlan = link.linkinfo.id;
-					continue;
+				/* ignore new link events for non-bridge port interfaces or bridges we do not manage */
+				if (!exists(bridges, brname))
+					return;
+
+				/* ignore new link events for interfaces we already know */
+				if (exists(interfaces, rtevent.msg.ifname))
+					return;
+
+				/* ignore non-backhaul BSSes */
+				if (access(`/sys/class/net/${rtevent.msg.ifname}/phy80211/index`))
+					for (let radioname, radiostate in ubus.call('network.wireless', 'status'))
+						for (let wif in radiostate.interfaces)
+							if (wif.ifname == rtevent.msg.ifname && !(wif.config.multi_ap & 1))
+								return;
+
+				log.info(`Adding port ${rtevent.msg.ifname} to bridge ${brname}`);
+				interfaces[rtevent.msg.ifname] = bridges[brname].addPort(rtevent.msg, false);
+				port_change_cb(interfaces[rtevent.msg.ifname], true);
 			}
+			else {
+				/* ignore delete link events not removing the entire interface */
+				if (rtevent.msg.change[0] != 0xffffffff)
+					return;
 
-			break;
-		}
+				/* ignore delete link events for interfaces unknown to us */
+				if (!exists(interfaces, rtevent.msg.ifname))
+					return;
 
-		let i1905rxsock = socket.create(ifname, socket.const.ETH_P_1905, vlan);
-		let lldprxsock = socket.create(ifname, socket.const.ETH_P_LLDP, vlan);
+				for (let brname, bridge in bridges) {
+					if (bridge.deletePort(rtevent.msg.ifname)) {
+						log.info(`Removing port ${rtevent.msg.ifname} from bridge ${brname}`);
+						port_change_cb(interfaces[rtevent.msg.ifname], false);
+						delete interfaces[rtevent.msg.ifname];
+						break;
+					}
+				}
+			}
+			//} catch (e) {
+			//	log.debug(`EXCEPTION IN LISTENER: ${e} ${{ ...e }}`)
+			//}
+		}, [rtconst.RTM_NEWLINK, rtconst.RTM_DELLINK]);
+	},
+
+	addLocalInterface: function (ifname) {
 		let rv;
 
-		if (!i1905rxsock || !lldprxsock)
-			return null;
-
 		for (let link in resolve_bridge_ports(ifname)) {
-			let i1905txsock = i1905rxsock;
-			let lldptxsock = lldprxsock;
+			let i1905sock = socket.create(link.ifname, socket.const.ETH_P_1905, link.vlan);
+			let lldpsock = socket.create(link.ifname, socket.const.ETH_P_LLDP, link.vlan);
 
-			if (link.ifname != ifname) {
-				i1905txsock = socket.create(link.ifname, socket.const.ETH_P_1905, link.vlan);
-				lldptxsock = socket.create(link.ifname, socket.const.ETH_P_LLDP, link.vlan);
+			if (!i1905sock || !lldpsock)
+				return null;
 
-				if (!i1905txsock || !lldptxsock)
-					return null;
-			}
-
-			rv = (this.interfaces[link.ifname] ??= I1905LocalInterface.new(link, i1905rxsock, i1905txsock, lldprxsock, lldptxsock));
+			rv = (this.interfaces[link.ifname] ??= I1905LocalInterface.new(link, i1905sock, lldpsock));
 		}
 
 		return rv;
@@ -1092,13 +1197,25 @@ export default proto({
 	lookupLocalInterface: function (value) {
 		for (let k, ifc in this.interfaces)
 			if (ifc.ifname == value || ifc.address == value ||
-				ifc.i1905rxsock == value || ifc.i1905txsock == value ||
-				ifc.lldprxsock == value || ifc.lldptxsock == value)
+				ifc.i1905sock == value || ifc.lldpsock == value)
 				return ifc;
 	},
 
 	getLocalInterfaces: function () {
 		return values(this.interfaces);
+	},
+
+	addLocalBridge: function (brname) {
+		let br = I1905LocalBridge.new(brname);
+
+		for (let prname, i1905lif in br.ports)
+			this.interfaces[i1905lif.ifname] = i1905lif;
+
+		return (this.bridges[br.brname] ??= br);
+	},
+
+	lookupLocalBridge: function (brname) {
+		return this.bridges[brname];
 	},
 
 	addDevice: function (al_address) {
