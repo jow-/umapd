@@ -33,7 +33,6 @@ const IAgentSession = {
 	state: 'init',
 	retryCount: 0,
 	lastActionTime: 0,
-	midsInFlight: [],
 	controller: null,
 	radio: null,
 	key: null,
@@ -263,6 +262,8 @@ const IAgentSession = {
 			this.transitionState('config_apply');
 			this.step();
 		}
+
+		return true;
 	}
 };
 
@@ -279,7 +280,8 @@ const IProtoAutoConf = {
 			// idle state and nudge them once we found a controller
 			push(sessions, proto({
 				state: 'init',
-				radio: radio
+				radio: radio,
+				midsInFlight: []
 			}, IAgentSession));
 		}
 
