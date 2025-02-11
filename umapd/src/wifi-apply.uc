@@ -2,6 +2,7 @@
 
 'use strict';
 
+import { open, error as fserror } from 'fs';
 import { cursor } from 'uci';
 
 const ctx = cursor();
@@ -23,22 +24,25 @@ const WPS_ENCR_NONE = 0x0001;
 const WPS_ENCR_TKIP = 0x0004;
 const WPS_ENCR_AES = 0x0008;
 
+const lockfd = open('/var/lock/wifi-apply.lock', 'w');
+
+if (!lockfd || !lockfd.lock('x'))
+	die(`Unable to lock /var/lock/wifi-apply.lock: ${fserror()}`);
+
 ctx.foreach('wireless', 'wifi-iface', (s) => {
 	if (s.device == radio && s.mode == 'ap') {
 		ctx.delete('wireless', s['.name']);
 	}
 });
 
-// Tear down requested, nothing else to do
-if (length(settings) == 1 && settings[0]?.multi_ap?.tear_down) {
-	ctx.set('wireless', radio, 'disabled', 1);
-	ctx.commit('wireless');
-
-	system(['/sbin/wifi', 'up', radio]);
-	exit(0);
-}
+let disabled = false;
 
 for (let bss in settings) {
+	if (bss.multi_ap?.tear_down) {
+		disabled = true;
+		break;
+	}
+
 	let sid = ctx.add('wireless', 'wifi-iface');
 	ctx.set('wireless', sid, 'device', radio);
 	ctx.set('wireless', sid, 'mode', 'ap');
@@ -106,7 +110,10 @@ for (let bss in settings) {
 	ctx.set('wireless', sid, 'multi_ap', multi_ap_mode);
 }
 
-ctx.set('wireless', radio, 'disabled', 0);
+ctx.set('wireless', radio, 'disabled', disabled ? '1' : '0');
 ctx.commit('wireless');
 
 system(['/sbin/wifi', 'up', radio]);
+
+lockfd.lock('u');
+lockfd.close();
