@@ -14,8 +14,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+let verbosity = 0;
+
 export default {
-	debug: (fmt, ...args) => warn(sprintf(`[D] ${fmt}\n`, ...args)),
+	setVerbosity: (v) => (verbosity = v),
+
+	debug3: (fmt, ...args) => (verbosity > 2 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null),
+	debug2: (fmt, ...args) => (verbosity > 1 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null),
+	debug: (fmt, ...args) => (verbosity > 0 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null),
 	warn: (fmt, ...args) => warn(sprintf(`[W] ${fmt}\n`, ...args)),
 	error: (fmt, ...args) => warn(sprintf(`[E] ${fmt}\n`, ...args)),
 	info: (fmt, ...args) => warn(sprintf(`[I] ${fmt}\n`, ...args))

@@ -54,6 +54,7 @@ esac
 
 uci -q get umapd.@controller[0] | grep -q controller || {
     uci add umapd controller
+    uci set umapd.@controller[0].verbosity=1
     uci add_list umapd.@controller[0].interface=umapctrl
     uci commit umapd
 }

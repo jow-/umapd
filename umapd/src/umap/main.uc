@@ -38,15 +38,16 @@ function srcmac_to_almac(address) {
 function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
     let al_mac = msg.get_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS);
 
-    log.debug('RX %-8s: %s > %s : %04x (%s) [%d]',
+    log.debug('RX %-8s: %s%s > %s%s : %04x (%s) [%d]',
         i1905lif.ifname,
-        srcmac, dstmac,
+        (srcmac == model.address) ? '*' : '', srcmac,
+        (dstmac == model.address) ? '*' : '', dstmac,
         msg.type, utils.cmdu_type_ntoa(msg.type) ?? 'Unknown Type',
         msg.mid);
 
     for (let i = 0; msg.tlvs[i] != null; i += 3)
         if (msg.tlvs[i] != 0)
-            log.debug('  TLV %02x (%s) - %d byte',
+            log.debug2('  TLV %02x (%s) - %d byte',
                 msg.tlvs[i],
                 utils.tlv_type_ntoa(msg.tlvs[i]),
                 msg.tlvs[i + 2] - msg.tlvs[i + 1]);
@@ -344,6 +345,7 @@ export default function () {
         'radio|phy|r=s*',
         'controller',
         'mac=s',
+        'v+',
         'help'
     ]);
 
@@ -369,6 +371,8 @@ export default function () {
             '  Specify the AL MAC address to use. If omitted, a suitable address is generated\n'
         );
     }
+
+    log.setVerbosity(opts.v);
 
     if (length(opts.radio)) {
         for (let radio in opts.radio) {

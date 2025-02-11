@@ -397,7 +397,7 @@ export default {
 
 		for (let i = 0; this.tlvs[i] !== null; i += 3) {
 			if (this.tlvs[i] != 0) {
-				log.debug('  TLV %02x (%s) - %d byte',
+				log.debug2('  TLV %02x (%s) - %d byte',
 					this.tlvs[i],
 					tlv_name(this.tlvs[i]) ?? 'Unknown TLV',
 					this.tlvs[i + 2] - this.tlvs[i + 1]);
