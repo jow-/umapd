@@ -19,10 +19,10 @@ let verbosity = 0;
 export default {
 	setVerbosity: (v) => (verbosity = v),
 
-	debug3: (fmt, ...args) => (verbosity > 2 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null),
-	debug2: (fmt, ...args) => (verbosity > 1 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null),
-	debug: (fmt, ...args) => (verbosity > 0 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null),
-	warn: (fmt, ...args) => warn(sprintf(`[W] ${fmt}\n`, ...args)),
-	error: (fmt, ...args) => warn(sprintf(`[E] ${fmt}\n`, ...args)),
-	info: (fmt, ...args) => warn(sprintf(`[I] ${fmt}\n`, ...args))
+	debug3: function (fmt, ...args) { (verbosity > 2 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null) },
+	debug2: function (fmt, ...args) { (verbosity > 1 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null) },
+	debug: function (fmt, ...args) { (verbosity > 0 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null) },
+	warn: function (fmt, ...args) { warn(sprintf(`[W] ${fmt}\n`, ...args)) },
+	error: function (fmt, ...args) { warn(sprintf(`[E] ${fmt}\n`, ...args)) },
+	info: function (fmt, ...args) { warn(sprintf(`[I] ${fmt}\n`, ...args)) }
 };
