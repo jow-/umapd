@@ -360,6 +360,7 @@ export default function () {
         'bridge|b=s*',
         'radio|phy|r=s*',
         'controller',
+        'no-ubus',
         'mac=s',
         'v+',
         'help'
@@ -448,7 +449,7 @@ export default function () {
         }
     });
 
-    if (!ubus.publish())
+    if (!('no-ubus' in opts) && !ubus.publish())
         log.warn(`Unable to publish ieee1905 object: ${ubus.error()}`);
 
     if (length(model.interfaces) > 0)

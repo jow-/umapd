@@ -9,6 +9,7 @@ PROG=/usr/sbin/umapd
 start_service() {
 	local interfaces=$(uci -q get umapd.@agent[0].interface)
 	local verbosity=$(uci -q get umapd.@agent[0].verbosity)
+	local skipubus=$(uci -q get umapd.@agent[0].no_ubus)
 	local bridges=$(uci -q get umapd.@agent[0].bridge)
 	local radios=$(uci -q get umapd.@agent[0].radio)
 	local devices bridgedevs
@@ -52,6 +53,10 @@ start_service() {
 		procd_append_param command -v
 		v=$((v + 1))
 	done
+
+	if [ "${skipubus:-0}" -eq 1 ]; then
+		procd_append_param command --no-ubus
+	fi
 
     for ifname in $devices; do
         procd_append_param command --interface "$ifname"
