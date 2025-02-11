@@ -184,12 +184,16 @@ function supplicant_request(sock, cmd, timeout) {
 	return supplicant_waitfor(sock, /^[^<].+$/, timeout ?? 5000)?.[0];
 }
 
-function determine_phy(radio) {
+function determine_phyname(radio) {
 	let iwinfo = fs.popen(`iwinfo nl80211 phyname '${replace(radio, "'", "'\\''")}'`, 'r');
 	if (!iwinfo)
 		die(`Error launching iwinfo: ${fs.error()}`);
 
-	return +fs.readfile(`/sys/class/ieee80211/${trim(iwinfo.read('line'))}/index`);
+	return trim(iwinfo.read('line'));
+}
+
+function determine_phy(radio) {
+	return +fs.readfile(`/sys/class/ieee80211/${determine_phyname(radio)}/index`);
 }
 
 function delete_phy_netdevs(phyidx) {
@@ -363,6 +367,62 @@ function perform_wps(args) {
 	exit(rc);
 }
 
+let default_radio;
+let default_config;
+
+uci.load('umapd');
+uci.load('network');
+uci.load('wireless');
+
+uci.foreach('umapd', 'agent', (s) => {
+	if (!default_radio) {
+		let phyname = (type(s.radio) == 'array')
+			? s.radio[0]
+			: (type(s.radio) == 'string')
+				? s.radio
+				: null;
+
+		if (phyname) {
+			uci.foreach('wireless', 'wifi-device', (ws) => {
+				if (determine_phyname(ws['.name']) == phyname)
+					default_radio ??= ws['.name'];
+			});
+		}
+	}
+
+	if (!default_config) {
+		let bridge = (type(s.bridge) == 'array')
+			? s.bridge[0]
+			: (type(s.bridge) == 'string')
+				? s.bridge
+				: null;
+
+		if (bridge) {
+			uci.foreach('network', 'interface', (ifs) => {
+				if (ifs.device == bridge)
+					default_config ??= ifs['.name'];
+			});
+		}
+	}
+
+	if (!default_config) {
+		let iface = (type(s.interface) == 'array')
+			? s.interface[0]
+			: (type(s.interface) == 'string')
+				? s.interface
+				: null;
+
+		if (uci.get('network', iface) == 'interface') {
+			default_config ??= iface;
+		}
+		else if (iface) {
+			uci.foreach('network', 'interface', (ifs) => {
+				if (ifs.device == iface)
+					default_config ??= ifs['.name'];
+			});
+		}
+	}
+});
 
 const args = sys.getopt(['radio=s', 'phy=s', 'config=s', 'multi-ap', 'help']);
 
@@ -377,7 +437,7 @@ if ('help' in args) {
 }
 
 if (!('radio' in args)) {
-	if ((args.radio = uci.get_first('wireless', 'wifi-device')) == null) {
+	if ((args.radio = default_radio ?? uci.get_first('wireless', 'wifi-device')) == null) {
 		warn("No radio argument specified and no radio found in /etc/config/wireless - aborting.\n");
 		exit(1);
 	}
@@ -407,7 +467,10 @@ else if (!filter(fs.glob('/sys/class/ieee80211/*/index'), p => +args.phy == +fs.
 }
 
 if (!('config' in args)) {
-	args.config = 'wwan';
+	if (default_config)
+		args['multi-ap'] = true;
+
+	args.config = default_config ?? 'wwan';
 }
 else if (!match(args.config, /^[A-Za-z0-9_]+$/)) {
 	warn(`Given configuration name '${args.config}' is invalid - aborting.\n`);
