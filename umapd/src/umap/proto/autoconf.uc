@@ -203,10 +203,11 @@ const IAgentSession = {
 	},
 
 	handle_cmdu: function (i1905lif, dstmac, srcmac, msg) {
-		if (!(msg.mid in this.midsInFlight))
-			return false;
-
 		if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_RESPONSE) {
+			// Ignore autoconf responses not belonging to our pending requests
+			if (!(msg.mid in this.midsInFlight))
+				return false;
+
 			this.debug(`received AP Auto-Configuration response`);
 
 			if (this.state != 'search_controller')
@@ -233,15 +234,19 @@ const IAgentSession = {
 			this.step();
 		}
 		else if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_WSC) {
-			log.debug(`autoconf: received AP Auto-Configuration WSC message`);
+			const solicited = (msg.mid in this.midsInFlight);
+			const need_state = solicited ? 'config_request' : 'idle';
 
-			if (this.state != 'config_request')
-				return this.warn(`received AP Auto-Configuration WSC message while not in config_request state`);
+			if (this.state != need_state)
+				return this.warn(`received AP Auto-Configuration WSC message while not in ${need_state} state`);
 
-			//			let sender = model.lookupDevice(srcmac);
-			//
-			//			if (!sender)
-			//				return this.warn(`received AP Auto-Configuration WSC message from unknown device ${srcmac}`);
+			if (srcmac != this.controller.address)
+				return this.warn(`received AP Auto-Configuration from unexpected address ${srcmac}, expected ${this.controller.address}`);
+
+			const radio_id = msg.get_tlv(defs.TLV_AP_RADIO_IDENTIFIER);
+
+			if (radio_id != this.radio.address)
+				return this.debug(`ignoring AP Auto-Configuration for different radio ${radio_id}`);
 
 			const wscFrames = msg.get_tlvs(defs.TLV_WSC);
 
@@ -257,6 +262,14 @@ const IAgentSession = {
 					return this.warn(`received AP Auto-Configuration WSC message with unxpected type (${wscType ?? 'unknown'})`);
 
 				push(this.m2, wscFrame);
+			}
+
+			this.debug(`autoconf: received AP Auto-Configuration WSC ${solicited ? 'reply' : 'update'}`);
+
+			if (!solicited) {
+				const ack = cmdu.create(defs.MSG_IEEE1905_ACK, msg.mid);
+
+				ack.send(i1905lif.i1905sock, model.address, srcmac);
 			}
 
 			this.transitionState('config_apply');
@@ -427,6 +440,10 @@ const IProtoAutoConf = {
 	},
 
 	handle_cmdu: function (i1905lif, dstmac, srcmac, msg) {
+		// Ignore CMDUs not destined to us
+		if (dstmac != model.address && dstmac != defs.IEEE1905_MULTICAST_MAC)
+			return false;
+
 		if (model.isController)
 			return this.handle_controller_cmdu(i1905lif, dstmac, srcmac, msg);
 		else
