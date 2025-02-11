@@ -336,6 +336,21 @@ function emit_topology_notification() {
     model.topologyChanged = false;
 }
 
+let tasks_started = false;
+
+function start_periodic_tasks() {
+    if (!tasks_started) {
+        uloop.timer(250, update_self);
+        uloop.timer(500, emit_topology_discovery);
+        uloop.timer(1000, emit_topology_notification);
+        uloop.timer(5000, cleanup_model);
+
+        uloop.timer(5000, () => autoconf.init());
+
+        tasks_started = true;
+    }
+}
+
 export default function () {
     uloop.init();
 
@@ -427,18 +442,16 @@ export default function () {
         if (added) {
             uloop.handle(portifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
             uloop.handle(portifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+
+            start_periodic_tasks();
         }
     });
 
     if (!ubus.publish())
         log.warn(`Unable to publish ieee1905 object: ${ubus.error()}`);
 
-    uloop.timer(250, update_self);
-    uloop.timer(500, emit_topology_discovery);
-    uloop.timer(1000, emit_topology_notification);
-    uloop.timer(5000, cleanup_model);
-
-    autoconf.init();
+    if (length(model.interfaces) > 0)
+        start_periodic_tasks();
 
     uloop.run();
 
