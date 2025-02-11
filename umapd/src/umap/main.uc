@@ -99,6 +99,9 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
         // query higher layer info
         query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
         query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
+
+        // reset MID watermark
+        delete dev.mid_counter;
     }
     else if (msg.type == defs.MSG_TOPOLOGY_QUERY) {
         let i1905dev = model.lookupDevice(srcmac);
@@ -222,17 +225,19 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
     }
 
     if (msg.flags & defs.CMDU_F_ISRELAY) {
-        // unknown origin
-        if (!al_mac)
-            return log.warn(`Not relaying multicast message without AL MAC TLV`);
+        const i1905dev = model.lookupDevice(al_mac);
 
-        // already sent by us
-        if (al_mac == model.address && msg.mid < cmdu.mid_counter)
-            return log.warn(`Not relaying already sent multicast message`);
+        if (!i1905dev)
+            return log.warn(`Not relaying multicast message from unknown device %s`, srcmac);
+
+        if (msg.mid <= i1905dev.mid_counter)
+            return log.warn(`Already relayed CMDU [${msg.mid}] - last from ${al_mac} is [${i1905dev.mid_counter}] (network loop?)`);
 
         for (let i1905lif2 in model.getLocalInterfaces())
             if (i1905lif2.i1905sock != i1905lif.i1905sock)
                 msg.send(i1905lif2.i1905sock, srcmac, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
+
+        i1905dev.mid_counter = msg.mid;
     }
 }
 
