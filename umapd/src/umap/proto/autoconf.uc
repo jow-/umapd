@@ -75,7 +75,7 @@ const IAgentSession = {
 
 		let msg = cmdu.create(defs.MSG_AP_AUTOCONFIGURATION_SEARCH);
 
-		msg.add_tlv(defs.TLV_AL_MAC_ADDRESS, model.address);
+		msg.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
 		msg.add_tlv(defs.TLV_SEARCHED_ROLE, 0x00); // Registrar
 
 		msg.add_tlv(defs.TLV_SUPPORTED_SERVICE, [0x01]); // Multi-AP Agent
