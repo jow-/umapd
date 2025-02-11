@@ -223,20 +223,16 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
     if (msg.flags & defs.CMDU_F_ISRELAY) {
         // unknown origin
-        //if (!al_mac) {
-        //    log.warn(`Not relaying multicast message without AL MAC TLV`);
-        //    return;
-        //}
+        if (!al_mac)
+            return log.warn(`Not relaying multicast message without AL MAC TLV`);
 
         // already sent by us
-        if (al_mac == model.address && msg.mid < cmdu.mid_counter) {
-            log.warn(`Not relaying already sent multicast message`);
-            return;
-        }
+        if (al_mac == model.address && msg.mid < cmdu.mid_counter)
+            return log.warn(`Not relaying already sent multicast message`);
 
         for (let i1905lif2 in model.getLocalInterfaces())
             if (i1905lif2.i1905sock != i1905lif.i1905sock)
-                msg.send(i1905lif2.i1905sock, i1905lif2.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
+                msg.send(i1905lif2.i1905sock, srcmac, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
     }
 }
 
