@@ -282,6 +282,11 @@ const IAgentSession = {
 
 const IProtoAutoConf = {
 	init: function () {
+		if (this.initialized)
+			return false;
+
+		this.initialized = true;
+
 		const sessions = this.sessions;
 
 		// No scheduled work to do in controller mode
@@ -289,8 +294,6 @@ const IProtoAutoConf = {
 			return configuration.parseBSSConfigurations();
 
 		for (let radio in model.getRadios()) {
-			// Let first session trigger controller discovery, start others in
-			// idle state and nudge them once we found a controller
 			push(sessions, proto({
 				state: 'init',
 				radio: radio,

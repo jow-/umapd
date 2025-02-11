@@ -102,6 +102,8 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
         // reset MID watermark
         delete dev.mid_counter;
+
+        autoconf.init();
     }
     else if (msg.type == defs.MSG_TOPOLOGY_QUERY) {
         let i1905dev = model.lookupDevice(srcmac);
@@ -345,8 +347,6 @@ function start_periodic_tasks() {
         uloop.timer(500, emit_topology_discovery);
         uloop.timer(1000, emit_topology_notification);
         uloop.timer(5000, cleanup_model);
-
-        uloop.timer(5000, () => autoconf.init());
 
         tasks_started = true;
     }
