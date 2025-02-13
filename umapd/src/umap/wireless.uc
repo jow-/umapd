@@ -133,21 +133,6 @@ function frequencyToChannel(frequency) {
 		return (frequency - 56160) / 2160;
 }
 
-function mbmToMw(dbm) {
-	const LOG10_MAGIC = 1.25892541179;
-	let res = 1.0;
-	let ip = dbm / 10;
-	let fp = dbm % 10;
-
-	for (let k = 0; k < ip; k++)
-		res *= 10;
-
-	for (let k = 0; k < fp; k++)
-		res *= LOG10_MAGIC;
-
-	return int(res);
-}
-
 /**
  * Determine supported channel widths based on capabilities
  *
@@ -194,13 +179,17 @@ function getSupportedWidths(phy) {
  * Determine supported operating classes based on phy capabilities
  *
  * @param {object} phy - NL80211_CMD_GET_WIPHY reply message
+ * @param {integer} [radio_band] - The RF band the radio is tuned to
  * @returns {OperatingClass[]} Array of supported OperatingClass objects
  */
-function getSupportedOperatingClasses(phy) {
+function getSupportedOperatingClasses(phy, radio_band) {
 	const supportedClasses = [];
 	const supportedWidths = getSupportedWidths(phy);
 
 	for (let opClass in OPERATING_CLASSES) {
+		if (radio_band !== null && opClass.band !== radio_band)
+			continue;
+
 		if (!((opClass.width ?? 20) in supportedWidths))
 			continue;
 
@@ -208,38 +197,47 @@ function getSupportedOperatingClasses(phy) {
 		let disabledChannels = [];
 		let matchingFrequencies = 0;
 
-		for (let available_freq in phy.wiphy_bands?.freqs) {
-			if (available_freq.no_80mhz && opClass.width == 80)
-				continue;
+		for (let available_band in phy.wiphy_bands) {
+			for (let available_freq in available_band?.freqs) {
+				if (available_freq.no_80mhz && opClass.width == 80)
+					continue;
 
-			if (available_freq.no_160mhz && opClass.width == 160)
-				continue;
+				if (available_freq.no_160mhz && opClass.width == 160)
+					continue;
 
-			if (available_freq.no_ht40_minus && available_freq.no_ht40_plus && opClass.width == 40)
-				continue;
+				if (available_freq.no_ht40_minus && available_freq.no_ht40_plus && opClass.width == 40)
+					continue;
 
-			const band = frequencyToBand(available_freq.freq);
-			const channel = frequencyToChannel(available_freq.freq);
+				const band = frequencyToBand(available_freq.freq);
+				const channel = frequencyToChannel(available_freq.freq);
 
-			if (band != opClass.band)
-				continue;
+				if (band != opClass.band)
+					continue;
 
-			if (!(channel in opClass.channels))
-				continue;
+				if (!(channel in opClass.channels))
+					continue;
 
-			if (available_freq.disabled || available_freq.no_ir) {
-				push(disabledChannels, channel);
-				continue;
+				if (available_freq.disabled || available_freq.no_ir) {
+					push(disabledChannels, channel);
+					continue;
+				}
+
+				matchingFrequencies++;
+				maxTxPower = max(maxTxPower, available_freq.max_tx_power);
 			}
-
-			matchingFrequencies++;
-			maxTxPower = max(maxTxPower, freq.max_tx_power);
 		}
 
 		if (matchingFrequencies > 0)
 			push(supportedClasses, {
 				opclass: opClass.opc,
-				max_txpower_eirp: mbmToMw(maxTxPower),
+
+				// EasyMesh Spec v5, section 17.2.7 AP Radio Basic Capabilities
+				// TLV format states that the Max TX power EIRP field is coded
+				// as 2's complement signed integer in units of decibels
+				// relative to 1 mW (dBm). Since we can't possible see any
+				// negative values here, simply cap to the range 0..127
+				max_txpower_eirp: min(maxTxPower / 100, 127),
+
 				statically_non_operable_channels: disabledChannels
 			});
 	}
@@ -281,7 +279,7 @@ const IRadio = {
 	getBasicCapabilities: function () {
 		const caps = {
 			radio_unique_identifier: this.address,
-			opclasses_supported: getSupportedOperatingClasses(this.info),
+			opclasses_supported: getSupportedOperatingClasses(this.info, this.band),
 			max_bss_supported: 1
 		};
 
