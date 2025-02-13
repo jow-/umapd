@@ -272,6 +272,7 @@ const I1905Entity = {
 	}
 };
 
+let model;
 let I1905Device;
 
 const I1905RemoteInterface = proto({
@@ -709,27 +710,66 @@ const I1905LocalBridge = proto({
 		if (!(lldpsock = socket.create(link.ifname, socket.const.ETH_P_LLDP, tagged ? this.vlan : null)))
 			die(`Unable to spawn LLDP TX socket on ${link.ifname}: ${socket.error()}`);
 
-		if (access('/sbin/tc', 'x')) {
-			const rule =
-				`dev '${link.ifname}' pref 1 protocol ${socket.const.ETH_P_1905} ingress ` +
-				`u32 match u16 0x0180 0xffff at -14 match u32 0xc2000013 0xffffffff at -12 ` +
-				`action drop`;
+		const i1905lif = (this.ports[link.ifname] = I1905LocalInterface.new(link, i1905sock, lldpsock));
 
-			system(`/sbin/tc filter del ${rule} 2>/dev/null`);
-			system(`/sbin/tc qdisc add dev '${link.ifname}' clsact 2>/dev/null`);
-			system(`/sbin/tc filter add ${rule}`);
-		}
+		if (model.address != '00:00:00:00:00:00')
+			this.updatePortFilter(i1905lif.ifname, true);
 
-		return (this.ports[link.ifname] = I1905LocalInterface.new(link, i1905sock, lldpsock));
+		return i1905lif;
 	},
 
 	deletePort: function (ifname) {
 		if (!exists(this.ports, ifname))
 			return false;
 
+		this.updatePortFilter(ifname, false);
+
 		delete this.ports[ifname];
 
 		return true;
+	},
+
+	updatePortFilter: function (ifname, add) {
+		let i1905lif = this.ports[ifname];
+
+		if (!i1905lif)
+			return false;
+
+		if (!access('/sbin/tc', 'x'))
+			return false;
+
+		const rules = [];
+
+		for (let mac in [defs.IEEE1905_MULTICAST_MAC, i1905lif.address, model.address]) {
+			push(rules,
+				sprintf(
+					"dev '%s' pref 1 protocol 0x%04x ingress u32 " +
+					"match u16 0x%04x 0xffff at -14 " +
+					"match u32 0x%08x 0xffffffff at -12 " +
+					"action drop",
+					i1905lif.ifname, socket.const.ETH_P_1905,
+					...unpack('!HL', hexdec(mac, ':'))
+				)
+			);
+		}
+
+		let success = true;
+
+		for (let rule in rules)
+			system(`/sbin/tc filter del ${rule} 2>/dev/null`);
+
+		if (add) {
+			system(`/sbin/tc qdisc add dev '${i1905lif.ifname}' clsact 2>/dev/null`);
+
+			for (let rule in rules) {
+				log.debug(`adding TC filter ${rule}`);
+
+				if (!system(`/sbin/tc filter add ${rule}`))
+					success = false;
+			}
+		}
+
+		return success;
 	}
 }, I1905Entity);
 
@@ -1101,7 +1141,7 @@ I1905Device = proto({
 	}
 }, I1905Entity);
 
-export default proto({
+model = proto({
 	address: '00:00:00:00:00:00',
 	interfaces: {},
 	bridges: {},
@@ -1138,6 +1178,11 @@ export default proto({
 			(hash >> 0) & 0xff);
 
 		log.info(`Using AL MAC address: ${this.address}`);
+
+		/* Update TC filters in bridge ports */
+		for (let brname, i1905br in this.bridges)
+			for (let portname in i1905br.ports)
+				i1905br.updatePortFilter(portname, true);
 	},
 
 	observeDeviceChanges: function (port_change_cb) {
@@ -1604,3 +1649,5 @@ export default proto({
 		return (changed != 0);
 	}
 }, I1905Entity);
+
+export default model;
