@@ -286,31 +286,35 @@ const IAgentSession = {
 
 const IProtoAutoConf = {
 	init: function () {
-		if (this.initialized)
-			return false;
+		if (model.isController) {
+			configuration.parseBSSConfigurations();
+		}
+		else {
+			const sessions = this.sessions;
 
-		this.initialized = true;
+			uloop.timer(1000, function () {
+				this.set(1000);
 
-		const sessions = this.sessions;
+				for (let session in sessions)
+					session.step();
+			});
+		}
+	},
 
-		// No scheduled work to do in controller mode
+	restart_autoconfiguration: function () {
 		if (model.isController)
-			return configuration.parseBSSConfigurations();
+			return;
+
+		while (length(this.sessions))
+			pop(this.sessions);
 
 		for (let radio in model.getRadios()) {
-			push(sessions, proto({
+			push(this.sessions, proto({
 				state: 'init',
 				radio: radio,
 				midsInFlight: []
 			}, IAgentSession));
 		}
-
-		uloop.timer(1000, function () {
-			this.set(1000);
-
-			for (let session in sessions)
-				session.step();
-		});
 	},
 
 	handle_controller_cmdu: function (i1905lif, dstmac, srcmac, msg) {

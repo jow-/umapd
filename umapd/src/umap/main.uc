@@ -28,7 +28,7 @@ import defs from 'umap.defs';
 import ubus from 'umap.ubus';
 import log from 'umap.log';
 
-import autoconf from 'umap.proto.autoconf';
+import proto_autoconf from 'umap.proto.autoconf';
 
 function srcmac_to_almac(address) {
     let i1905dev = model.lookupDevice(address);
@@ -103,7 +103,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
         // reset MID watermark
         delete dev.mid_counter;
 
-        autoconf.init();
+        proto_autoconf.restart_autoconfiguration();
     }
     else if (msg.type == defs.MSG_TOPOLOGY_QUERY) {
         let i1905dev = model.lookupDevice(srcmac);
@@ -223,7 +223,12 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
         i1905dev.updateTLVs(msg.get_tlvs_raw());
     }
     else {
-        autoconf.handle_cmdu(i1905lif, dstmac, srcmac, msg);
+        const handled = false
+            || proto_autoconf.handle_cmdu(i1905lif, dstmac, srcmac, msg)
+            ;
+
+        if (!handled)
+            log.warn(`Not handling CMDU [${msg.mid}] ${utils.cmdu_type_ntoa(msg.type)}`);
     }
 
     if (msg.flags & defs.CMDU_F_ISRELAY) {
@@ -454,6 +459,8 @@ export default function () {
 
     if (length(model.interfaces) > 0)
         start_periodic_tasks();
+
+    proto_autoconf.init();
 
     uloop.run();
 
