@@ -16,7 +16,7 @@
 
 import { request as wlrequest, 'const' as wlconst, error as wlerror } from 'nl80211';
 import { popen, readfile } from 'fs';
-import { unpack } from 'struct';
+import { unpack, buffer } from 'struct';
 import { cursor } from 'uci';
 
 import log from 'umap.log';
@@ -294,6 +294,220 @@ const IRadio = {
 		}
 
 		return caps;
+	},
+
+	getHTCapabilities: function () {
+		for (let band in this.info?.wiphy_bands) {
+			for (let freq in band?.freqs) {
+				const rf_band = frequencyToBand(freq.freq);
+
+				if (rf_band === null)
+					continue;
+
+				if (rf_band !== this.band)
+					break;
+
+				if (!band.ht_capa)
+					return null;
+
+				let rx_streams = 1;
+				let tx_streams = 1;
+
+				if (band.ht_mcs_set) {
+					for (let idx in band.ht_mcs_set.rx_mcs_indexes) {
+						if (idx >= 8)
+							rx_streams = 2;
+						else if (idx >= 16)
+							rx_streams = 3;
+						else if (idx >= 24)
+							rx_streams = 4;
+					}
+
+					if (band.ht_mcs_set.tx_rx_mcs_set_equal)
+						tx_streams = rx_streams;
+					else
+						tx_streams = band.ht_mcs_set.tx_max_spatial_streams;
+				}
+
+				return {
+					radio_unique_identifier: this.address,
+					ht_support_40mhz: !!(band.ht_capa & 0b00000010),
+					short_gi_support_20mhz: !!(band.ht_capa & 0b00100000),
+					short_gi_support_40mhz: !!(band.ht_capa & 0b01000000),
+					max_supported_rx_spatial_streams: rx_streams,
+					max_supported_tx_spatial_streams: tx_streams
+				};
+			}
+		}
+
+		return null;
+	},
+
+	getVHTCapabilities: function () {
+		for (let band in this.info?.wiphy_bands) {
+			for (let freq in band?.freqs) {
+				const rf_band = frequencyToBand(freq.freq);
+
+				if (rf_band === null)
+					continue;
+
+				if (rf_band !== this.band)
+					break;
+
+				if (!band.vht_capa)
+					return null;
+
+				const supp_chan_width = (band.vht_capa >> 2) & 3;
+
+				let supported_vht_rx_mcs = 0;
+				let supported_vht_tx_mcs = 0;
+
+				let max_rx_ss = 1;
+				let max_tx_ss = 1;
+
+				for (let i = 0; i < 8; i++) {
+					const set_rx = band.vht_mcs_set?.rx_mcs_set?.[i];
+					const max_rx = set_rx?.mcs_indexes?.[-1];
+
+					const set_tx = band.vht_mcs_set?.tx_mcs_set?.[i];
+					const max_tx = set_tx?.mcs_indexes?.[-1];
+
+					if (max_rx == 7)
+						supported_vht_rx_mcs |= (0 << (i * 2));
+					else if (max_rx == 8)
+						supported_vht_rx_mcs |= (1 << (i * 2));
+					else if (max_rx == 9)
+						supported_vht_rx_mcs |= (2 << (i * 2));
+					else
+						supported_vht_rx_mcs |= (3 << (i * 2));
+
+					if (max_tx == 7)
+						supported_vht_tx_mcs |= (0 << (i * 2));
+					else if (max_tx == 8)
+						supported_vht_tx_mcs |= (1 << (i * 2));
+					else if (max_tx == 9)
+						supported_vht_tx_mcs |= (2 << (i * 2));
+					else
+						supported_vht_tx_mcs |= (3 << (i * 2));
+
+					max_rx_ss = max(max_rx_ss, set_rx?.streams);
+					max_tx_ss = max(max_tx_ss, set_tx?.streams);
+				}
+
+				return {
+					radio_unique_identifier: this.address,
+					vht_support_160mhz: (supp_chan_width >= 1),
+					vht_support_8080mhz: (supp_chan_width >= 2),
+					su_beamformer_capable: !!(band.vht_capa & 0x00000800),
+					mu_beamformer_capable: !!(band.vht_capa & 0x00080000),
+					short_gi_support_80mhz: !!(band.vht_capa & 0x00000020),
+					short_gi_support_160mhz_8080mhz: !!(band.vht_capa & 0x00000040),
+					max_supported_rx_spatial_streams: max_rx_ss - 1,
+					max_supported_tx_spatial_streams: max_tx_ss - 1,
+					supported_vht_rx_mcs,
+					supported_vht_tx_mcs,
+				};
+			}
+		}
+
+		return null;
+	},
+
+	getHECapabilities: function (sta_mode) {
+		for (let band in this.info?.wiphy_bands) {
+			for (let freq in band?.freqs) {
+				const rf_band = frequencyToBand(freq.freq);
+
+				if (rf_band === null)
+					continue;
+
+				if (rf_band !== this.band)
+					break;
+
+				let he_cap_phy;
+				let he_cap_mcs_set;
+
+				for (let iftype_caps in band.iftype_data) {
+					if (iftype_caps.iftypes?.[sta_mode ? 'managed' : 'ap']) {
+						he_cap_phy = iftype_caps.he_cap_phy;
+						he_cap_mcs_set = iftype_caps.he_cap_mcs_set;
+						break;
+					}
+				}
+
+				if (!he_cap_phy)
+					return null;
+
+				const supported_mcs = buffer();
+
+				let max_rx_ss = 1;
+				let max_tx_ss = 1;
+
+				let he_support_160mhz = false;
+				let he_support_8080mhz = false;
+
+				for (let per_bw_sets in he_cap_mcs_set) {
+					let rx_mcses = 0;
+					let tx_mcses = 0;
+
+					for (let i = 0; i < 8; i++) {
+						const set_rx = per_bw_sets?.rx_mcs_set?.[i];
+						const max_rx = set_rx?.mcs_indexes?.[-1];
+
+						const set_tx = per_bw_sets?.tx_mcs_set?.[i];
+						const max_tx = set_tx?.mcs_indexes?.[-1];
+
+						if (max_rx == 7)
+							rx_mcses |= (0 << (i * 2));
+						else if (max_rx == 9)
+							rx_mcses |= (1 << (i * 2));
+						else if (max_rx == 11)
+							rx_mcses |= (2 << (i * 2));
+						else
+							rx_mcses |= (3 << (i * 2));
+
+						if (max_tx == 7)
+							tx_mcses |= (0 << (i * 2));
+						else if (max_tx == 9)
+							tx_mcses |= (1 << (i * 2));
+						else if (max_tx == 11)
+							tx_mcses |= (2 << (i * 2));
+						else
+							tx_mcses |= (3 << (i * 2));
+
+						max_rx_ss = max(max_rx_ss, set_rx?.streams);
+						max_tx_ss = max(max_tx_ss, set_tx?.streams);
+					}
+
+					supported_mcs.put('!HH', rx_mcses, tx_mcses);
+
+					if (per_bw_sets.bandwidth == 160)
+						he_support_160mhz = true;
+					else if (per_bw_sets.bandwidth == 8080)
+						he_support_8080mhz = true;
+				}
+
+				return {
+					radio_unique_identifier: this.address,
+					supported_he_mcs: supported_mcs.pull(),
+					max_supported_rx_spatial_streams: max_rx_ss - 1,
+					max_supported_tx_spatial_streams: max_tx_ss - 1,
+					he_support_160mhz,
+					he_support_8080mhz,
+					su_beamformer_capable: !!(he_cap_phy[4] & 0b10000000),
+					mu_beamformer_capable: !!(he_cap_phy[5] & 0b00000010),
+					ul_mu_mimo_capable: !!(he_cap_phy[3] & 0b11000000),
+
+					/* FIXME: are these supported by mac80211 at all? */
+					ul_mu_mimo_ofdma_capable: false,
+					dl_mu_mimo_ofdma_capable: false,
+					ul_ofdma_capable: false,
+					dl_ofdma_capable: false
+				};
+			}
+		}
+
+		return null;
 	},
 
 	inferWSCAuthenticationSuites: function () {
