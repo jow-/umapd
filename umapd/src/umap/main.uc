@@ -29,6 +29,7 @@ import ubus from 'umap.ubus';
 import log from 'umap.log';
 
 import proto_autoconf from 'umap.proto.autoconf';
+import proto_capab from 'umap.proto.capabilities';
 
 function srcmac_to_almac(address) {
     let i1905dev = model.lookupDevice(address);
@@ -225,6 +226,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
     else {
         const handled = false
             || proto_autoconf.handle_cmdu(i1905lif, dstmac, srcmac, msg)
+            || proto_capab.handle_cmdu(i1905lif, dstmac, srcmac, msg)
             ;
 
         if (!handled)
@@ -461,6 +463,7 @@ export default function () {
         start_periodic_tasks();
 
     proto_autoconf.init();
+    proto_capab.init();
 
     uloop.run();
 

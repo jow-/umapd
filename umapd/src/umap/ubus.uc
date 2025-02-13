@@ -19,6 +19,8 @@ import defs from 'umap.defs';
 import model from 'umap.model';
 import utils from 'umap.utils';
 
+import proto_capab from 'umap.proto.capabilities';
+
 import { connect as ubus_connect, error as ubus_error } from 'ubus';
 
 let ubusconn = null;
@@ -162,6 +164,54 @@ const I1905UbusProcedures = {
 			}
 
 			return req.reply({ devices });
+		}
+	},
+
+	query_ap_capability: {
+		args: {
+			ubus_rpc_session: "00000000000000000000000000000000",
+			macaddress: "00:00:00:00:00:00"
+		},
+		call: function (req) {
+			const sent = proto_capab.query_ap_capability(req.args.macaddress, response => {
+				if (!response)
+					return req.reply(null, 7 /* UBUS_STATUS_TIMEOUT */);
+
+				const ret = {
+					ap_capability: response.get_tlv(defs.TLV_AP_CAPABILITY),
+					radios: {}
+				};
+
+				for (let tt in [
+					defs.TLV_AP_RADIO_BASIC_CAPABILITIES,
+					defs.TLV_AP_HT_CAPABILITIES,
+					defs.TLV_AP_VHT_CAPABILITIES,
+					defs.TLV_AP_HE_CAPABILITIES,
+					defs.TLV_AP_RADIO_ADVANCED_CAPABILITIES,
+				]) {
+					for (let data in response.get_tlvs(tt)) {
+						const mac = data?.radio_unique_identifier;
+
+						if (!mac)
+							continue;
+
+						delete data.radio_unique_identifier;
+
+						if (tt == defs.TLV_AP_HE_CAPABILITIES)
+							data.supported_he_mcs = hexenc(data.supported_he_mcs);
+
+						ret.radios[mac] ??= {};
+						ret.radios[mac][lc(utils.tlv_type_ntoa(tt))] = data;
+					}
+				}
+
+				return req.reply(ret);
+			});
+
+			if (!sent)
+				return req.reply(null, 4 /* UBUS_STATUS_NOT_FOUND */);
+
+			return req.defer();
 		}
 	}
 };
