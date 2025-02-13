@@ -272,6 +272,8 @@ const I1905Entity = {
 	}
 };
 
+let I1905Device;
+
 const I1905RemoteInterface = proto({
 	new: function (address, i1905dev) {
 		return proto({
@@ -331,6 +333,23 @@ const I1905LocalInterface = proto({
 
 	getNeighbors: function () {
 		return [...this.neighbors];
+	},
+
+	lookupNeighbor: function (lookup) {
+		if (proto(lookup) === I1905Device) {
+			for (let i1905rif in this.neighbors)
+				if (i1905rif.dev === lookup)
+					return i1905rif;
+		}
+		else if (proto(lookup) === I1905RemoteInterface) {
+			if (lookup in this.neighbors)
+				return lookup;
+		}
+		else if (type(lookup) == 'string') {
+			for (let i1905rif in this.neighbors)
+				if (i1905rif.address == lookup || i1905rif.dev?.al_address == lookup)
+					return i1905rif;
+		}
 	},
 
 	isBridged: function () {
@@ -714,7 +733,7 @@ const I1905LocalBridge = proto({
 	}
 }, I1905Entity);
 
-const I1905Device = proto({
+I1905Device = proto({
 	new: function (al_address) {
 		return proto({
 			al_address,
