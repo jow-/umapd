@@ -232,6 +232,8 @@ const IAgentSession = {
 
 			this.transitionState('config_request');
 			this.step();
+
+			return true;
 		}
 		else if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_WSC) {
 			const solicited = (msg.mid in this.midsInFlight);
@@ -274,9 +276,11 @@ const IAgentSession = {
 
 			this.transitionState('config_apply');
 			this.step();
+
+			return true;
 		}
 
-		return true;
+		return false;
 	}
 };
 
