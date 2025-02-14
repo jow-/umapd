@@ -35,25 +35,22 @@ const IProtoCapabilities = {
 		if (!i1905dev)
 			return null;
 
-		for (let i1905lif in model.getLocalInterfaces()) {
-			if (i1905lif.lookupNeighbor(i1905dev)) {
-				const query = cmdu.create(defs.MSG_AP_CAPABILITY_QUERY);
+		const query = cmdu.create(defs.MSG_AP_CAPABILITY_QUERY);
 
-				if (type(reply_cb) == 'function') {
-					callbacks[query.mid] = [
-						reply_cb,
-						timer(REPLY_HANDLER_TIMEOUT, () => {
-							callbacks[query.mid][0](null);
-							delete callbacks[query.mid];
-						})
-					];
-				}
-
-				query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
-
-				return true;
-			}
+		if (type(reply_cb) == 'function') {
+			callbacks[query.mid] = [
+				reply_cb,
+				timer(REPLY_HANDLER_TIMEOUT, () => {
+					callbacks[query.mid][0](null);
+					delete callbacks[query.mid];
+				})
+			];
 		}
+
+		for (let i1905lif in model.getLocalInterfaces())
+			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+
+		return true;
 	},
 
 	handle_cmdu: function (i1905lif, dstmac, srcmac, msg) {
@@ -62,11 +59,6 @@ const IProtoCapabilities = {
 			return false;
 
 		if (msg.type === defs.MSG_AP_CAPABILITY_QUERY) {
-			const i1905dev = model.lookupDevice(srcmac);
-
-			if (!i1905dev)
-				return log.warn(`capabilities: ignoring AP capability query from unknown device ${srcmac}`);
-
 			const reply = cmdu.create(defs.MSG_AP_CAPABILITY_REPORT, msg.mid);
 
 			reply.add_tlv(defs.TLV_AP_CAPABILITY, {
@@ -103,9 +95,9 @@ const IProtoCapabilities = {
 				});
 			}
 
-			log.debug(`capabilities: sending AP capability report to ${i1905dev.al_address}`);
+			log.debug(`capabilities: sending AP capability report to ${srcmac}`);
 
-			reply.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+			reply.send(i1905lif.i1905sock, model.address, srcmac);
 
 			return true;
 		}
