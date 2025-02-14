@@ -312,12 +312,12 @@ const IProtoAutoConf = {
 		}
 	},
 
-	restart_autoconfiguration: function () {
+	start_autoconfiguration: function () {
 		if (model.isController)
 			return;
 
-		while (length(this.sessions))
-			pop(this.sessions);
+		if (length(this.sessions))
+			return;
 
 		for (let radio in model.getRadios()) {
 			push(this.sessions, proto({

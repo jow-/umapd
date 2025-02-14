@@ -100,7 +100,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
             query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
         }
 
-        proto_autoconf.restart_autoconfiguration();
+        proto_autoconf.start_autoconfiguration();
     }
     else if (msg.type == defs.MSG_TOPOLOGY_NOTIFICATION) {
         if (!model.isController)
