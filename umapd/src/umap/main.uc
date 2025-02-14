@@ -370,6 +370,35 @@ function emit_topology_notification() {
     model.topologyChanged = false;
 }
 
+function update_node_information() {
+    this.set(30000);
+
+    const i1905lifs = model.getLocalInterfaces();
+
+    for (let i1905dev in model.getDevices()) {
+        let query;
+
+        // query device information
+        query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
+
+        for (let i1905lif in i1905lifs)
+            query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+
+        // query link metrics
+        query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
+        query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
+
+        for (let i1905lif in i1905lifs)
+            query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+
+        // query higher layer info
+        query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
+
+        for (let i1905lif in i1905lifs)
+            query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+    }
+}
+
 let tasks_started = false;
 
 function start_periodic_tasks() {
@@ -377,6 +406,7 @@ function start_periodic_tasks() {
         uloop.timer(250, update_self);
         uloop.timer(500, emit_topology_discovery);
         uloop.timer(1000, emit_topology_notification);
+        uloop.timer(30000, update_node_information);
         uloop.timer(5000, cleanup_model);
 
         tasks_started = true;
