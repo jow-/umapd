@@ -86,9 +86,9 @@ const AgingDict = {
 		this.gc(key, now);
 
 		if (exists(this.d, key))
-			this.d[key] = [now, val];
-		else
 			this.d[key][0] = now;
+		else
+			this.d[key] = [now, val];
 
 		return val;
 	},
