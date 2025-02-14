@@ -327,6 +327,7 @@ const I1905LocalInterface = proto({
 		if (!(i1905if in this.neighbors)) {
 			log.debug('Adding new link %s/%s -> %s', this.ifname, this.address, i1905if.address);
 			push(this.neighbors, i1905if);
+			model.topologyChanged = true;
 		}
 
 		return i1905if;
