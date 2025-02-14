@@ -28,6 +28,7 @@ import defs from 'umap.defs';
 import ubus from 'umap.ubus';
 import log from 'umap.log';
 
+import proto_topology from 'umap.proto.topology';
 import proto_autoconf from 'umap.proto.autoconf';
 import proto_capab from 'umap.proto.capabilities';
 
@@ -56,209 +57,14 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
         return;
     }
 
-    if (msg.type == defs.MSG_TOPOLOGY_DISCOVERY) {
-        let if_mac = msg.get_tlv(defs.TLV_MAC_ADDRESS);
+    const handled = false
+        || proto_topology.handle_cmdu(i1905lif, dstmac, srcmac, msg)
+        || proto_autoconf.handle_cmdu(i1905lif, dstmac, srcmac, msg)
+        || proto_capab.handle_cmdu(i1905lif, dstmac, srcmac, msg)
+        ;
 
-        if (!al_mac || !if_mac) {
-            log.warn(`Ignoring incomplete topology discovery CMDU`);
-            return;
-        }
-
-        let dev = model.lookupDevice(al_mac);
-        let query;
-
-        if (!dev) {
-            dev = model.addDevice(al_mac);
-
-            // is a neighbour not known to us yet, assume it is new
-            // and send a counter topology discovery message to speed
-            // up the neighbour discovering us
-            query = cmdu.create(defs.MSG_TOPOLOGY_DISCOVERY);
-            query.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
-            query.add_tlv(defs.TLV_MAC_ADDRESS, i1905lif.address);
-            query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
-        }
-
-        let iface = dev.addInterface(if_mac);
-
-        i1905lif.addNeighbor(iface);
-
-        iface.updateCMDUTimestamp();
-
-        if (model.isController) {
-            // query device information
-            query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
-            query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
-
-            // query link metrics
-            query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
-            query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
-            query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
-
-            // query higher layer info
-            query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
-            query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
-        }
-
-        proto_autoconf.start_autoconfiguration();
-    }
-    else if (msg.type == defs.MSG_TOPOLOGY_NOTIFICATION) {
-        if (!model.isController)
-            return;
-
-        const al_mac = msg.get_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS);
-
-        if (!al_mac)
-            return log.warn(`topology: ignoring notification without AL MAC`);
-
-        const query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
-
-        query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
-    }
-    else if (msg.type == defs.MSG_TOPOLOGY_QUERY) {
-        // Ignore queries destined to other nodes
-        if (dstmac != model.address)
-            return;
-
-        let reply = cmdu.create(defs.MSG_TOPOLOGY_RESPONSE, msg.mid);
-
-        for (let tlv in model.getLocalDevice().getTLVs(
-            defs.TLV_IEEE1905_DEVICE_INFORMATION,
-            defs.TLV_DEVICE_BRIDGING_CAPABILITY,
-            defs.TLV_IEEE1905_NEIGHBOR_DEVICES,
-            defs.TLV_NON1905_NEIGHBOR_DEVICES,
-            defs.TLV_L2_NEIGHBOR_DEVICE
-        )) {
-            reply.add_tlv_raw(tlv.type, tlv.payload);
-        }
-
-        reply.send(i1905lif.i1905sock, dstmac, srcmac);
-    }
-    else if (msg.type == defs.MSG_LINK_METRIC_QUERY) {
-        // Ignore queries destined to other nodes
-        if (dstmac != model.address)
-            return;
-
-        let requested_metrics = msg.get_tlv(defs.TLV_LINK_METRIC_QUERY);
-
-        if (!requested_metrics) {
-            log.warn(`Ignoring incomplete link metric query CMDU`);
-            return;
-        }
-
-        let reply = cmdu.create(defs.MSG_LINK_METRIC_RESPONSE, msg.mid);
-
-        for (let tlv in model.getLocalDevice().getTLVs(
-            defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC,
-            defs.TLV_IEEE1905_RECEIVER_LINK_METRIC
-        )) {
-            if (requested_metrics.al_mac_address == null || utils.ether_ntoa(tlv.payload, 6) == requested_metrics.al_mac_address)
-                reply.add_tlv_raw(tlv.type, tlv.payload);
-        }
-
-        reply.send(i1905lif.i1905sock, dstmac, srcmac);
-    }
-    else if (msg.type == defs.MSG_TOPOLOGY_RESPONSE) {
-        if (!model.isController)
-            return;
-
-        let devinfo = msg.get_tlv(defs.TLV_IEEE1905_DEVICE_INFORMATION);
-
-        if (!devinfo) {
-            log.warn(`Ignoring malformed topology response CMDU`);
-            return;
-        }
-
-        let i1905dev = model.addDevice(devinfo.al_mac_address);
-
-        for (let peer_if in devinfo.local_interfaces)
-            i1905dev.addInterface(peer_if.local_if_mac_address).updateCMDUTimestamp();
-
-        for (let neigh_tlv in msg.get_tlvs(defs.TLV_IEEE1905_NEIGHBOR_DEVICES)) {
-            for (let neighbor in neigh_tlv.ieee1905_neighbors) {
-                if (!model.lookupDevice(neighbor.neighbor_al_mac_address)) {
-                    model.addDevice(neighbor.neighbor_al_mac_address);
-
-                    let query;
-
-                    // query device information
-                    query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
-                    query.send(i1905lif.i1905sock, i1905lif.address, neighbor.neighbor_al_mac_address);
-
-                    // query link metrics
-                    query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
-                    query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
-                    query.send(i1905lif.i1905sock, i1905lif.address, neighbor.neighbor_al_mac_address);
-
-                    // query higher layer info
-                    query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
-                    query.send(i1905lif.i1905sock, i1905lif.address, neighbor.neighbor_al_mac_address);
-                }
-            }
-        }
-
-        i1905dev.updateTLVs(msg.get_tlvs_raw());
-    }
-    else if (msg.type == defs.MSG_LINK_METRIC_RESPONSE) {
-        let tlvs_by_al_address;
-
-        for (let tlv in msg.get_tlvs_raw(defs.TLV_IEEE1905_TRANSMITTER_LINK_METRIC, defs.TLV_IEEE1905_RECEIVER_LINK_METRIC)) {
-            const transmitter_al_mac_address = utils.ether_ntoa(tlv.payload);
-
-            if (!transmitter_al_mac_address) {
-                log.warn(`Ignoring malformed metrics reply CMDU`);
-                return;
-            }
-
-            push((tlvs_by_al_address ??= {})[transmitter_al_mac_address] ??= [], tlv);
-        }
-
-        for (let al_address, tlvs in tlvs_by_al_address) {
-            let i1905dev = model.lookupDevice(al_address);
-
-            if (i1905dev)
-                i1905dev.updateTLVs(tlvs);
-        }
-    }
-    else if (msg.type == defs.MSG_HIGHER_LAYER_QUERY) {
-        // Ignore queries destined to other nodes
-        if (dstmac != model.address)
-            return;
-
-        let reply = cmdu.create(defs.MSG_HIGHER_LAYER_RESPONSE, msg.mid);
-
-        reply.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
-
-        for (let tlv in model.getLocalDevice().getTLVs(defs.TLV_IEEE1905_PROFILE_VERSION, defs.TLV_DEVICE_IDENTIFICATION, defs.TLV_CONTROL_URL, defs.TLV_IPV4, defs.TLV_IPV6))
-            reply.add_tlv_raw(tlv.type, tlv.payload);
-
-        reply.send(i1905lif.i1905sock, dstmac, srcmac);
-    }
-    else if (msg.type == defs.MSG_HIGHER_LAYER_RESPONSE) {
-        let i1905dev = model.lookupDevice(al_mac);
-
-        if (i1905dev)
-            i1905dev.updateTLVs(msg.get_tlvs_raw());
-    }
-    else if (msg.type == defs.MSG_COMBINED_INFRASTRUCTURE_METRICS) {
-        let i1905dev = model.lookupDevice(srcmac);
-
-        if (!i1905dev) {
-            log.warn('Ignoring infrastructure metrics from unknown device %s', srcmac);
-            return;
-        }
-
-        i1905dev.updateTLVs(msg.get_tlvs_raw());
-    }
-    else {
-        const handled = false
-            || proto_autoconf.handle_cmdu(i1905lif, dstmac, srcmac, msg)
-            || proto_capab.handle_cmdu(i1905lif, dstmac, srcmac, msg)
-            ;
-
-        if (!handled)
-            log.warn(`Not handling CMDU [${msg.mid}] ${utils.cmdu_type_ntoa(msg.type)}`);
-    }
+    if (!handled)
+        log.warn(`Not handling CMDU [${msg.mid}] ${utils.cmdu_type_ntoa(msg.type)}`);
 
     if (msg.flags & defs.CMDU_F_ISRELAY) {
         const key = `${al_mac}-${msg.mid}`;
@@ -321,95 +127,6 @@ function handle_lldp_input(flags) {
         }
 
         model.addDevice(msg.chassis).addInterface(msg.port).updateLLDPTimestamp();
-    }
-}
-
-function update_self() {
-    this.set(5000);
-
-    model.updateSelf(ubus.call('network.interface', 'dump')?.interface ?? []);
-}
-
-function cleanup_model() {
-    this.set(5000);
-
-    model.collectGarbage();
-}
-
-function emit_topology_discovery() {
-    this.set(60000);
-
-    for (let i1905lif in model.getLocalInterfaces()) {
-        let lldpdu = lldp.create(model.address, i1905lif.address, 180);
-
-        lldpdu.send(i1905lif.lldpsock);
-
-        let msg = cmdu.create(defs.MSG_TOPOLOGY_DISCOVERY);
-
-        msg.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
-        msg.add_tlv(defs.TLV_MAC_ADDRESS, i1905lif.address);
-
-        msg.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC);
-
-    }
-}
-
-function emit_topology_notification() {
-    this.set(1000);
-
-    if (!model.topologyChanged)
-        return;
-
-    let reply = cmdu.create(defs.MSG_TOPOLOGY_NOTIFICATION);
-
-    reply.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
-
-    for (let i1905lif in model.getLocalInterfaces())
-        reply.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
-
-    model.topologyChanged = false;
-}
-
-function update_node_information() {
-    this.set(30000);
-
-    const i1905lifs = model.getLocalInterfaces();
-
-    for (let i1905dev in model.getDevices()) {
-        let query;
-
-        // query device information
-        query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
-
-        for (let i1905lif in i1905lifs)
-            query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
-
-        // query link metrics
-        query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
-        query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
-
-        for (let i1905lif in i1905lifs)
-            query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
-
-        // query higher layer info
-        query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
-
-        for (let i1905lif in i1905lifs)
-            query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
-    }
-}
-
-let tasks_started = false;
-
-function start_periodic_tasks() {
-    if (!tasks_started) {
-        uloop.timer(250, update_self);
-        uloop.timer(500, emit_topology_discovery);
-        uloop.timer(1000, emit_topology_notification);
-        uloop.timer(30000, update_node_information);
-        uloop.timer(5000, cleanup_model);
-
-        tasks_started = true;
     }
 }
 
@@ -506,18 +223,19 @@ export default function () {
             uloop.handle(portifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
             uloop.handle(portifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
 
-            start_periodic_tasks();
+            proto_topology.start();
         }
     });
 
     if (!('no-ubus' in opts) && !ubus.publish())
         log.warn(`Unable to publish ieee1905 object: ${ubus.error()}`);
 
-    if (length(model.interfaces) > 0)
-        start_periodic_tasks();
-
+    proto_topology.init();
     proto_autoconf.init();
     proto_capab.init();
+
+    if (length(model.interfaces) > 0)
+        proto_topology.start();
 
     uloop.run();
 
