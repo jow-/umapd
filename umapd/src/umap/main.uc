@@ -31,6 +31,8 @@ import log from 'umap.log';
 import proto_autoconf from 'umap.proto.autoconf';
 import proto_capab from 'umap.proto.capabilities';
 
+const relayed_messages = utils.AgingDict(60000);
+
 function srcmac_to_almac(address) {
     let i1905dev = model.lookupDevice(address);
     return i1905dev?.al_address;
@@ -100,9 +102,6 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
         // query higher layer info
         query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
         query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
-
-        // reset MID watermark
-        delete dev.mid_counter;
 
         proto_autoconf.restart_autoconfiguration();
     }
@@ -234,19 +233,16 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
     }
 
     if (msg.flags & defs.CMDU_F_ISRELAY) {
-        const i1905dev = model.lookupDevice(al_mac);
+        const key = `${al_mac}-${msg.mid}`;
 
-        if (!i1905dev)
-            return log.warn(`Not relaying multicast message from unknown device %s`, srcmac);
-
-        if (msg.mid <= i1905dev.mid_counter)
-            return log.warn(`Already relayed CMDU [${msg.mid}] - last from ${al_mac} is [${i1905dev.mid_counter}] (network loop?)`);
+        if (relayed_messages.has(key))
+            return log.warn(`Already relayed CMDU [${msg.mid}] from ${al_mac} (network loop?)`);
 
         for (let i1905lif2 in model.getLocalInterfaces())
             if (i1905lif2.i1905sock != i1905lif.i1905sock)
                 msg.send(i1905lif2.i1905sock, srcmac, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
 
-        i1905dev.mid_counter = msg.mid;
+        relayed_messages.set(key, true);
     }
 }
 
