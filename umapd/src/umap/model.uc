@@ -17,7 +17,7 @@
 import { request as wlrequest, 'const' as wlconst } from 'nl80211';
 import { request as rtrequest, listener as rtlistener, error as rterror, 'const' as rtconst } from 'rtnl';
 import { pack, unpack, buffer } from 'struct';
-import { access, open, readfile } from 'fs';
+import { access, open, readfile, lsdir } from 'fs';
 
 import socket from 'umap.socket';
 import * as codec from 'umap.tlv.codec';
@@ -1155,10 +1155,22 @@ model = proto({
 		let mac = 'ff:ff:ff:ff:ff:ff',
 			hash = 5381;
 
-		/* Determine the lowest MAC address among local interfaces... */
-		for (let ifname, i1905lif in this.interfaces)
-			if (i1905lif.address < mac)
-				mac = i1905lif.address;
+		/* Determine the lowest MAC address among local network devices... */
+		for (let devname in lsdir('/sys/class/net')) {
+			const addr = readfile(`/sys/class/net/${devname}/address`, 17);
+
+			// Skip loopback mac
+			if (!addr || addr == '00:00:00:00:00:00')
+				continue;
+
+			// Skip wireless and bridge devices since we presume them to be ephemeral
+			if (access(`/sys/class/net/${devname}/phy80211`) ||
+				access(`/sys/class/net/${devname}/bridge`))
+				continue;
+
+			if (addr < mac)
+				mac = addr;
+		}
 
 		/* ... hash its bytes ... */
 		mac = unpack('!6B', hexdec(mac, ':'));
@@ -1169,6 +1181,7 @@ model = proto({
 		hash = ((hash << 5) - hash) + mac[3];
 		hash = ((hash << 5) - hash) + mac[4];
 		hash = ((hash << 5) - hash) + mac[5];
+		hash = ((hash << 5) - hash) + this.isController;
 
 		/* ... and turn result into a locally administered MAC */
 		this.address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x',
