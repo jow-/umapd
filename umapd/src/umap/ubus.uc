@@ -18,7 +18,9 @@ import log from 'umap.log';
 import defs from 'umap.defs';
 import model from 'umap.model';
 import utils from 'umap.utils';
+import configuration from 'umap.configuration';
 
+import proto_autoconf from 'umap.proto.autoconf';
 import proto_capab from 'umap.proto.capabilities';
 
 import { connect as ubus_connect, error as ubus_error } from 'ubus';
@@ -164,6 +166,21 @@ const I1905UbusProcedures = {
 			}
 
 			return req.reply({ devices });
+		}
+	},
+
+	renew_ap_autoconfig: {
+		args: {
+			ubus_rpc_session: "00000000000000000000000000000000"
+		},
+		call: function (req) {
+			if (!model.isController)
+				return req.reply(null, 8 /* UBUS_STATUS_NOT_SUPPORTED */);
+
+			configuration.reload();
+			proto_autoconf.renew();
+
+			req.reply({ success: true });
 		}
 	},
 

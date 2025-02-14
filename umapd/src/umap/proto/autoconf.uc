@@ -27,6 +27,7 @@ import * as wconst from 'umap.wireless';
 import configuration from 'umap.configuration';
 
 
+const callbacks = {};
 const MAX_RETRIES = 5;
 
 const IAgentSession = {
@@ -312,6 +313,58 @@ const IProtoAutoConf = {
 		}
 	},
 
+	renew: function () {
+		if (!model.isController)
+			return false;
+
+		for (let i1905dev in model.getDevices()) {
+			const renew = cmdu.create(defs.MSG_AP_AUTOCONFIGURATION_RENEW);
+
+			renew.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
+			renew.add_tlv(defs.TLV_SUPPORTED_ROLE, 0x00 /* Registrar */);
+
+			/* IEEE 1905.1-2013 Section 10.1.3 states that the autoconfig
+			 * process should be repeated for each band supported by the
+			 * registrar.
+			 *
+			 * Wi-Fi EasyMesh v5.0 Section 7.1 on the other states that a map
+			 * agent shall proceed with sending WSC M1 for each of its radios
+			 * irrespective of the value specified in the SupportedFreqBand.
+			 *
+			 * Since map agents thus effectively ignore the indicated
+			 * supported band, don't re-send for each band and simply
+			 * hardcoded 2.4GHz */
+			renew.add_tlv(defs.TLV_SUPPORTED_FREQUENCY_BAND, 0x00 /* 2.4GHz */);
+
+			callbacks[renew.mid] = {
+				try: 0,
+				dstmac: i1905dev.al_address,
+				timeout: timer(1000, () => {
+					const s = callbacks[renew.mid];
+
+					if (s.try >= 3) {
+						log.warn(`autoconf: device ${s.dstmac} did not acknowledge reconfig - connection lost?`);
+						delete callbacks[renew.mid];
+						return;
+					}
+
+					log.warn(`autoconf: no WSC M1 from ${s.dstmac} for renew CMDU [${renew.mid}], retrying`);
+
+					for (let i1905lif in model.getLocalInterfaces())
+						renew.send(i1905lif.i1905sock, model.address, s.dstmac, cmdu.CMDU_F_ISRELAY);
+
+					this.set(1000);
+					s.try++;
+				})
+			};
+
+			for (let i1905lif in model.getLocalInterfaces())
+				renew.send(i1905lif.i1905sock, model.address, i1905dev.al_address, cmdu.CMDU_F_ISRELAY);
+		}
+
+		return true;
+	},
+
 	start_autoconfiguration: function () {
 		if (model.isController)
 			return;
@@ -399,6 +452,15 @@ const IProtoAutoConf = {
 
 			if (wscType != 1)
 				return log.warn(`autoconf: received AP Auto-Configuration WSC message with unxpected type (${wscType ?? 'unknown'})`);
+
+			const s = callbacks[msg.mid];
+
+			if (s) {
+				log.info(`autoconfig: device ${s.dstmac} acknowledged renew request`);
+
+				s.timeout.cancel();
+				delete callbacks[msg.mid];
+			}
 
 			const wscDetails = wsc.wscProcessM1(wscFrame);
 			const desiredBSSes = configuration.selectBSSConfigurations(
