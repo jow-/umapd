@@ -236,24 +236,21 @@ const IAgentSession = {
 			return true;
 		}
 		else if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_WSC) {
-			const solicited = (msg.mid in this.midsInFlight);
-			const need_state = solicited ? 'config_request' : 'idle';
-
-			if (this.state != need_state)
-				return this.warn(`received AP Auto-Configuration WSC message while not in ${need_state} state`);
+			if (this.state != 'config_request')
+				return this.warn(`received WSC message while not in config request state`);
 
 			if (srcmac != this.controller.address)
-				return this.warn(`received AP Auto-Configuration from unexpected address ${srcmac}, expected ${this.controller.address}`);
+				return this.warn(`received WSC message from unexpected address ${srcmac}, expected ${this.controller.address}`);
 
 			const radio_id = msg.get_tlv(defs.TLV_AP_RADIO_IDENTIFIER);
 
 			if (radio_id != this.radio.address)
-				return this.debug(`ignoring AP Auto-Configuration for different radio ${radio_id}`);
+				return this.debug(`ignoring WSC message for different radio ${radio_id}`);
 
 			const wscFrames = msg.get_tlvs(defs.TLV_WSC);
 
 			if (length(wscFrames) == 0)
-				return this.warn(`received AP Auto-Configuration WSC message without WSC TLV`);
+				return this.warn(`received WSC message without WSC TLV`);
 
 			this.m2 = [];
 
@@ -261,18 +258,12 @@ const IAgentSession = {
 				const wscType = wsc.wscGetType(wscFrame);
 
 				if (wscType != 2)
-					return this.warn(`received AP Auto-Configuration WSC message with unxpected type (${wscType ?? 'unknown'})`);
+					return this.warn(`received WSC message with unxpected type (${wscType ?? 'unknown'})`);
 
 				push(this.m2, wscFrame);
 			}
 
-			this.debug(`autoconf: received AP Auto-Configuration WSC ${solicited ? 'reply' : 'update'}`);
-
-			if (!solicited) {
-				const ack = cmdu.create(defs.MSG_IEEE1905_ACK, msg.mid);
-
-				ack.send(i1905lif.i1905sock, model.address, srcmac);
-			}
+			this.debug(`autoconf: received WSC reply`);
 
 			this.transitionState('config_apply');
 			this.step();
