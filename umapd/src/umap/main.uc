@@ -171,6 +171,32 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 
         let i1905dev = model.addDevice(devinfo.al_mac_address);
 
+        for (let peer_if in devinfo.local_interfaces)
+            i1905dev.addInterface(peer_if.local_if_mac_address).updateCMDUTimestamp();
+
+        for (let neigh_tlv in msg.get_tlvs(defs.TLV_IEEE1905_NEIGHBOR_DEVICES)) {
+            for (let neighbor in neigh_tlv.ieee1905_neighbors) {
+                if (!model.lookupDevice(neighbor.neighbor_al_mac_address)) {
+                    model.addDevice(neighbor.neighbor_al_mac_address);
+
+                    let query;
+
+                    // query device information
+                    query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
+                    query.send(i1905lif.i1905sock, i1905lif.address, neighbor.neighbor_al_mac_address);
+
+                    // query link metrics
+                    query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
+                    query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
+                    query.send(i1905lif.i1905sock, i1905lif.address, neighbor.neighbor_al_mac_address);
+
+                    // query higher layer info
+                    query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
+                    query.send(i1905lif.i1905sock, i1905lif.address, neighbor.neighbor_al_mac_address);
+                }
+            }
+        }
+
         i1905dev.updateTLVs(msg.get_tlvs_raw());
     }
     else if (msg.type == defs.MSG_LINK_METRIC_RESPONSE) {
