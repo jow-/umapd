@@ -298,7 +298,7 @@ const IAgentSession = {
 const IProtoAutoConf = {
 	init: function () {
 		if (model.isController) {
-			configuration.parseBSSConfigurations();
+			configuration.reload();
 		}
 		else {
 			const sessions = this.sessions;

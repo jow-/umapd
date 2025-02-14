@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-import { request as wlrequest, 'const' as wlconst } from 'nl80211';
-import { request as rtrequest, 'const' as rtconst } from 'rtnl';
 import { cursor } from 'uci';
 
 import log from 'umap.log';
@@ -34,6 +32,13 @@ function to_array(x) {
 
 export default {
 	bssConfigurationProfiles: [],
+
+	reload: function () {
+		while (length(this.bssConfigurationProfiles))
+			pop(this.bssConfigurationProfiles);
+
+		this.parseBSSConfigurations();
+	},
 
 	addBSSConfiguration: function (settings) {
 		push(this.bssConfigurationProfiles, settings);
