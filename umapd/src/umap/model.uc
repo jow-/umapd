@@ -1480,7 +1480,7 @@ model = proto({
 		return encode_tlv(defs.TLV_IEEE1905_NEIGHBOR_DEVICES, {
 			local_if_mac_address: address,
 			ieee1905_neighbors: map(neighs, neigh => ({
-				neighbor_al_mac_address: neigh.address,
+				neighbor_al_mac_address: neigh.dev.al_address,
 				bridges_present: neigh.isBridged()
 			}))
 		});
