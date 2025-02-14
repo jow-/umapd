@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-import * as uloop from 'uloop';
+import { process, timer } from 'uloop';
 
 import utils from 'umap.utils';
 import model from 'umap.model';
@@ -186,7 +186,7 @@ const IAgentSession = {
 					push(bssConfigs, settings);
 				}
 
-				uloop.process('/usr/libexec/umap/wifi-apply',
+				process('/usr/libexec/umap/wifi-apply',
 					[sprintf('%J', bssConfigs)],
 					{
 						RADIO: this.radio.config,
@@ -279,6 +279,26 @@ const IAgentSession = {
 
 			return true;
 		}
+		else if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_RENEW) {
+			if (this.state != 'idle')
+				return this.warn(`ignoring renew request while not idle`);
+
+			const al_mac = msg.get_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS);
+
+			if (!al_mac)
+				return this.warn(`ignoring incomplete renew request`);
+
+			if (al_mac != this.controller.address)
+				return this.warn(`ignoring renew request from unexpected device ${al_mac}, expecting ${this.controller.address}`);
+
+			const self = this;
+			timer(500, () => {
+				self.transitionState('config_request');
+				self.step();
+			});
+
+			return true;
+		}
 
 		return false;
 	}
@@ -292,7 +312,7 @@ const IProtoAutoConf = {
 		else {
 			const sessions = this.sessions;
 
-			uloop.timer(1000, function () {
+			timer(1000, function () {
 				this.set(1000);
 
 				for (let session in sessions)
