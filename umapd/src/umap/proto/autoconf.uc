@@ -288,8 +288,6 @@ const IAgentSession = {
 				self.transitionState('config_request');
 				self.step();
 			});
-
-			return true;
 		}
 
 		return false;
@@ -518,7 +516,9 @@ const IProtoAutoConf = {
 			if (session.handle_cmdu(i1905lif, dstmac, srcmac, msg))
 				return true;
 
-		//log.debug(`autoconf: discarding unexpected CMDU ${msg.mid}`);
+		// Consider renew requests to be handled
+		if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_RENEW)
+			return true;
 
 		return false;
 	},
