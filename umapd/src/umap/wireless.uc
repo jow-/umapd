@@ -133,6 +133,23 @@ function frequencyToChannel(frequency) {
 		return (frequency - 56160) / 2160;
 }
 
+function channelToFrequency(band, channel) {
+	if (band == WPS_RF_2GHZ && channel == 14)
+		return 2484;
+	else if (band == WPS_RF_6GHZ && channel == 2)
+		return 5935;
+	else if (band == WPS_RF_2GHZ && channel >= 1 && channel <= 13)
+		return 2407 + channel * 5;
+	else if (band == WPS_RF_5GHZ && channel >= 184 && channel <= 196)
+		return 4000 + channel * 5;
+	else if (band == WPS_RF_5GHZ && channel >= 32 && channel <= 189)
+		return 5000 + channel * 5;
+	else if (band == WPS_RF_6GHZ && channel >= 1 && channel <= 233)
+		return 5950 + channel * 5;
+	else if (band == WPS_RF_60GHZ && channel >= 1 && channel <= 8)
+		return 56160 + channel * 2160;
+}
+
 /**
  * Determine supported channel widths based on capabilities
  *
@@ -663,4 +680,50 @@ export default {
 			if (phyidx != null && radio.index == +phyidx)
 				return radio;
 	},
+
+	lookupRadioByAddress: function (address) {
+		for (let radio in this.radios)
+			if (address != null && radio.address == address)
+				return radio;
+	},
+
+	lookupOperatingClass: function (opclass) {
+		for (let opc in OPERATING_CLASSES)
+			if (opc.opc === opclass)
+				return opc;
+	},
+
+	lookupFrequenciesByOperatingClass: function (opclass) {
+		for (let opc in OPERATING_CLASSES) {
+			if (opc.opc === opclass) {
+				const freqs = [];
+
+				for (let channel in opc.channels) {
+					const freq = channelToFrequency(opc.band, channel);
+
+					if (freq != null)
+						push(freqs, freq);
+				}
+
+				return freqs;
+			}
+		}
+	},
+
+	lookupOperatingClassChannelByFrequency: function (frequency, opclass) {
+		const band = frequencyToBand(frequency);
+		const channel = frequencyToChannel(frequency);
+
+		if (band != null && channel != null) {
+			for (let opc in OPERATING_CLASSES) {
+				if (opclass != null && opclass !== opc.opc)
+					continue;
+
+				if (opc.band == band && channel in opc.channels)
+					return [opc.opc, channel];
+			}
+		}
+	},
+
+	channelToFrequency: channelToFrequency,
 };

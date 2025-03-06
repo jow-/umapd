@@ -187,15 +187,12 @@ encoder[0x08] = (buf, tlv) => {
 	if (!(tlv.link_metrics_requested in [ 0x00, 0x01, 0x02 ]))
 		return null;
 
+	tlv.query_type ??= (al_mac_address != null) && 1;
+
 	buf.put('B', tlv.query_type);
 
-	if (al_mac_address != null) {
-		if (tlv.query_type == null)
-			tlv.query_type = 1;
-
-		if (al_mac_address != null)
-			buf.put('6s', al_mac_address);
-	}
+	if (tlv.query_type == 1)
+		buf.put('6s', al_mac_address);
 
 	buf.put('B', tlv.link_metrics_requested);
 
@@ -1321,13 +1318,13 @@ encoder[0x8f] = (buf, tlv) => {
 	if (radio_unique_identifier == null)
 		return null;
 
-	if (type(tlv.current_opclass) != "array" || length(tlv.current_opclass) > 0xff)
+	if (type(tlv.current_opclasses) != "array" || length(tlv.current_opclasses) > 0xff)
 		return null;
 
 	buf.put('6s', radio_unique_identifier);
-	buf.put('B', length(tlv.current_opclass));
+	buf.put('B', length(tlv.current_opclasses));
 
-	for (let item in tlv.current_opclass) {
+	for (let item in tlv.current_opclasses) {
 		if (type(item) != "object")
 			return null;
 
@@ -1374,16 +1371,12 @@ encoder[0x91] = (buf, tlv) => {
 	if (tlv.frame_body != null && (type(tlv.frame_body) != "string"))
 		return null;
 
+	tlv.result_code ??= (tlv.frame_body != null) && 0;
+
 	buf.put('B', tlv.result_code);
 
-	if (tlv.frame_body != null) {
-		if (tlv.result_code == null)
-			tlv.result_code = 0;
-
-		if (tlv.frame_body != null) {
-			buf.put('*', tlv.frame_body);
-		}
-	}
+	if (tlv.result_code == 0)
+		buf.put('*', tlv.frame_body);
 
 	return buf;
 };
@@ -1456,6 +1449,11 @@ encoder[0x94] = (buf, tlv) => {
 	if (tlv.esp_vi != null && (type(tlv.esp_vi) != "string" || length(tlv.esp_vi) > 3))
 		return null;
 
+	tlv.include_esp_be ??= (tlv.esp_be != null) && 1;
+	tlv.include_esp_bk ??= (tlv.esp_bk != null) && 1;
+	tlv.include_esp_vo ??= (tlv.esp_vo != null) && 1;
+	tlv.include_esp_vi ??= (tlv.esp_vi != null) && 1;
+
 	buf.put('6s', bssid);
 	buf.put('B', tlv.channel_utilization);
 	buf.put('!H', tlv.sta_count);
@@ -1466,41 +1464,17 @@ encoder[0x94] = (buf, tlv) => {
 		| (tlv.include_esp_vi << 4)
 	);
 
-	if (tlv.esp_be != null) {
-		if (tlv.include_esp_be == null)
-			tlv.include_esp_be = 1;
+	if (tlv.include_esp_be == 1)
+		buf.put('3s', tlv.esp_be);
 
-		if (tlv.esp_be != null) {
-			buf.put('3s', tlv.esp_be);
-		}
-	}
+	if (tlv.include_esp_bk == 1)
+		buf.put('3s', tlv.esp_bk);
 
-	if (tlv.esp_bk != null) {
-		if (tlv.include_esp_bk == null)
-			tlv.include_esp_bk = 1;
+	if (tlv.include_esp_vo == 1)
+		buf.put('3s', tlv.esp_vo);
 
-		if (tlv.esp_bk != null) {
-			buf.put('3s', tlv.esp_bk);
-		}
-	}
-
-	if (tlv.esp_vo != null) {
-		if (tlv.include_esp_vo == null)
-			tlv.include_esp_vo = 1;
-
-		if (tlv.esp_vo != null) {
-			buf.put('3s', tlv.esp_vo);
-		}
-	}
-
-	if (tlv.esp_vi != null) {
-		if (tlv.include_esp_vi == null)
-			tlv.include_esp_vi = 1;
-
-		if (tlv.esp_vi != null) {
-			buf.put('3s', tlv.esp_vi);
-		}
-	}
+	if (tlv.include_esp_vi == 1)
+		buf.put('3s', tlv.esp_vi);
 
 	return buf;
 };
@@ -2007,7 +1981,7 @@ encoder[0xa5] = (buf, radios) => {
 		if (!(item.scan_impact in [ 0x00, 0x01, 0x02, 0x03 ]))
 			return null;
 
-		if (type(item.opclass) != "array" || length(item.opclass) > 0xff)
+		if (type(item.opclasses) != "array" || length(item.opclasses) > 0xff)
 			return null;
 
 		buf.put('6s', radio_unique_identifier);
@@ -2017,9 +1991,9 @@ encoder[0xa5] = (buf, radios) => {
 		);
 
 		buf.put('!L', item.minimum_scan_interval);
-		buf.put('B', length(item.opclass));
+		buf.put('B', length(item.opclasses));
 
-		for (let item2 in item.opclass) {
+		for (let item2 in item.opclasses) {
 			if (type(item2) != "object")
 				return null;
 
@@ -2065,13 +2039,13 @@ encoder[0xa6] = (buf, tlv) => {
 		if (radio_unique_identifier == null)
 			return null;
 
-		if (type(item.opclass) != "array" || length(item.opclass) > 0xff)
+		if (type(item.opclasses) != "array" || length(item.opclasses) > 0xff)
 			return null;
 
 		buf.put('6s', radio_unique_identifier);
-		buf.put('B', length(item.opclass));
+		buf.put('B', length(item.opclasses));
 
-		for (let item2 in item.opclass) {
+		for (let item2 in item.opclasses) {
 			if (type(item2) != "object")
 				return null;
 
@@ -2107,59 +2081,80 @@ encoder[0xa7] = (buf, tlv) => {
 	if (!(tlv.scan_status in [ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 ]))
 		return null;
 
-	if (type(tlv.timestamp) != "string" || length(tlv.timestamp) > 0xff)
+	if (tlv.timestamp != null && (type(tlv.timestamp) != "string" || length(tlv.timestamp) > 0xff))
 		return null;
 
 	if (type(tlv.neighbors) != "array" || length(tlv.neighbors) > 0xffff)
 		return null;
 
+	tlv.scan_status ??= (tlv.timestamp != null) && 0;
+	tlv.scan_status ??= (tlv.utilization != null) && 0;
+	tlv.scan_status ??= (tlv.noise != null) && 0;
+	tlv.scan_status ??= (tlv.neighbors != null) && 0;
+	tlv.scan_status ??= (tlv.aggregate_scan_duration != null) && 0;
+	tlv.scan_status ??= (tlv.active_scan != null) && 0;
+
 	buf.put('6s', radio_unique_identifier);
 	buf.put('B', tlv.opclass);
 	buf.put('B', tlv.channel);
 	buf.put('B', tlv.scan_status);
-	buf.put('B', length(tlv.timestamp));
-	buf.put('*', tlv.timestamp);
-	buf.put('B', tlv.utilization);
-	buf.put('B', tlv.noise);
-	buf.put('!H', length(tlv.neighbors));
 
-	for (let item in tlv.neighbors) {
-		if (type(item) != "object")
-			return null;
+	if (tlv.scan_status == 0)
+		buf.put('B', length(tlv.timestamp));
 
-		const bssid = hexdec(match(item.bssid, /^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$/i)?.[0], ":");
+	if (tlv.scan_status == 0)
+		buf.put('*', tlv.timestamp);
 
-		if (bssid == null)
-			return null;
+	if (tlv.scan_status == 0)
+		buf.put('B', tlv.utilization);
 
-		if (type(item.ssid) != "string" || length(item.ssid) > 0xff)
-			return null;
+	if (tlv.scan_status == 0)
+		buf.put('B', tlv.noise);
 
-		if (type(item.channel_bandwidth) != "string" || length(item.channel_bandwidth) > 0xff)
-			return null;
+	if (tlv.scan_status == 0)
+		buf.put('!H', length(tlv.neighbors));
 
-		if (type(item.bss_color) != "int" || item.bss_color < 0 || item.bss_color > 0)
-			return null;
+	if (tlv.scan_status == 0)
+		for (let item in tlv.neighbors) {
+			if (type(item) != "object")
+				return null;
 
-		buf.put('6s', bssid);
-		buf.put('B', length(item.ssid));
-		buf.put('*', item.ssid);
-		buf.put('B', item.signal_strength);
-		buf.put('B', length(item.channel_bandwidth));
-		buf.put('*', item.channel_bandwidth);
+			const bssid = hexdec(match(item.bssid, /^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$/i)?.[0], ":");
+
+			if (bssid == null)
+				return null;
+
+			if (type(item.ssid) != "string" || length(item.ssid) > 0xff)
+				return null;
+
+			if (type(item.channel_bandwidth) != "string" || length(item.channel_bandwidth) > 0xff)
+				return null;
+
+			if (type(item.bss_color) != "int" || item.bss_color < 0 || item.bss_color > 0)
+				return null;
+
+			buf.put('6s', bssid);
+			buf.put('B', length(item.ssid));
+			buf.put('*', item.ssid);
+			buf.put('B', item.signal_strength);
+			buf.put('B', length(item.channel_bandwidth));
+			buf.put('*', item.channel_bandwidth);
+			buf.put('B', 0
+				| (item.bss_load_element_present << 7)
+				| ((item.bss_color & 0b00111111) << 0)
+			);
+
+			buf.put('B', item.channel_utilization);
+			buf.put('!H', item.station_count);
+		}
+
+	if (tlv.scan_status == 0)
+		buf.put('!L', tlv.aggregate_scan_duration);
+
+	if (tlv.scan_status == 0)
 		buf.put('B', 0
-			| (item.bss_load_element_present << 7)
-			| ((item.bss_color & 0b00111111) << 0)
+			| (tlv.active_scan << 7)
 		);
-
-		buf.put('B', item.channel_utilization);
-		buf.put('!H', item.station_count);
-	}
-
-	buf.put('!L', tlv.aggregate_scan_duration);
-	buf.put('B', 0
-		| (tlv.scan_type << 7)
-	);
 
 	return buf;
 };
@@ -2774,29 +2769,20 @@ encoder[0xbc] = (buf, tlv) => {
 			return null;
 	}
 
+	tlv.reason_code ??= (bssid != null) && 7;
+	tlv.reason_code ??= (tlv.service_prio_rule_id != null) && 1;
+	tlv.reason_code ??= (tlv.qmid != null) && 11;
+
 	buf.put('B', tlv.reason_code);
 
-	if (bssid != null) {
-		if (tlv.reason_code == null)
-			tlv.reason_code = 7;
+	if (tlv.reason_code in [ 7, 8 ])
+		buf.put('6s', bssid);
 
-		if (bssid != null)
-			buf.put('6s', bssid);
-	}
-
-	if (tlv.service_prio_rule_id != null) {
-		if (tlv.reason_code == null)
-			tlv.reason_code = 1;
-
+	if (tlv.reason_code in [ 1, 2 ])
 		buf.put('!L', tlv.service_prio_rule_id);
-	}
 
-	if (tlv.qmid != null) {
-		if (tlv.reason_code == null)
-			tlv.reason_code = 11;
-
+	if (tlv.reason_code == 11)
 		buf.put('!H', tlv.qmid);
-	}
 
 	return buf;
 };
@@ -3075,22 +3061,24 @@ encoder[0xcb] = (buf, tlv) => {
 	if (radio_unique_identifier == null)
 		return null;
 
-	const mac_address_included = hexdec(match(tlv.mac_address_included, /^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$/i)?.[0], ":");
+	let mac_address = null;
 
-	if (mac_address_included == null)
-		return null;
+	if (tlv.mac_address != null) {
+		mac_address = hexdec(match(tlv.mac_address, /^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$/i)?.[0], ":");
 
-	const mac_address = hexdec(match(tlv.mac_address, /^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$/i)?.[0], ":");
+		if (mac_address == null)
+			return null;
+	}
 
-	if (mac_address == null)
-		return null;
+	tlv.mac_address_included ??= (mac_address != null) && 1;
 
 	buf.put('6s', radio_unique_identifier);
 	buf.put('B', 0
 		| (tlv.mac_address_included << 7)
 	);
 
-	buf.put('6s', mac_address);
+	if (tlv.mac_address_included == 1)
+		buf.put('6s', mac_address);
 
 	return buf;
 };
@@ -4943,7 +4931,7 @@ decoder[0x8f] = (buf, end) => {
 
 	const radio_unique_identifier = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 	const current_opclass_count = buf.get('B');
-	const current_opclass = [];
+	const current_opclasses = [];
 
 	for (let h = 0; h < current_opclass_count; h++) {
 		if (buf.pos() + 2 > end)
@@ -4952,7 +4940,7 @@ decoder[0x8f] = (buf, end) => {
 		const opclass = buf.get('B');
 		const current_operating_channel = buf.get('B');
 
-		push(current_opclass, {
+		push(current_opclasses, {
 			opclass,
 			current_operating_channel,
 		});
@@ -4962,7 +4950,7 @@ decoder[0x8f] = (buf, end) => {
 
 	return {
 		radio_unique_identifier,
-		current_opclass,
+		current_opclasses,
 		current_txpower_eirp,
 	};
 };
@@ -5591,7 +5579,7 @@ decoder[0xa5] = (buf, end) => {
 
 		const minimum_scan_interval = buf.get('!L');
 		const opclass_count = buf.get('B');
-		const opclass = [];
+		const opclasses = [];
 
 		for (let i = 0; i < opclass_count; i++) {
 			if (buf.pos() + 2 > end)
@@ -5608,7 +5596,7 @@ decoder[0xa5] = (buf, end) => {
 				push(channels, buf.get('B'));
 			}
 
-			push(opclass, {
+			push(opclasses, {
 				opclass,
 				channels,
 			});
@@ -5620,7 +5608,7 @@ decoder[0xa5] = (buf, end) => {
 			scan_impact,
 			scan_impact_name: defs.SCAN_IMPACT[scan_impact],
 			minimum_scan_interval,
-			opclass,
+			opclasses,
 		});
 	}
 
@@ -5645,7 +5633,7 @@ decoder[0xa6] = (buf, end) => {
 
 		const radio_unique_identifier = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 		const opclass_count = buf.get('B');
-		const opclass = [];
+		const opclasses = [];
 
 		for (let i = 0; i < opclass_count; i++) {
 			if (buf.pos() + 2 > end)
@@ -5662,7 +5650,7 @@ decoder[0xa6] = (buf, end) => {
 				push(channels, buf.get('B'));
 			}
 
-			push(opclass, {
+			push(opclasses, {
 				opclass,
 				channels,
 			});
@@ -5670,7 +5658,7 @@ decoder[0xa6] = (buf, end) => {
 
 		push(radios, {
 			radio_unique_identifier,
-			opclass,
+			opclasses,
 		});
 	}
 
@@ -5683,7 +5671,7 @@ decoder[0xa6] = (buf, end) => {
 // 0xa7 - Channel Scan Result
 // Wi-Fi EasyMesh
 decoder[0xa7] = (buf, end) => {
-	if (buf.pos() + 19 > end)
+	if (buf.pos() + 9 > end)
 		return null;
 
 	const radio_unique_identifier = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
@@ -5694,62 +5682,99 @@ decoder[0xa7] = (buf, end) => {
 	if (!exists(defs.SCAN_STATUS, scan_status))
 		return null;
 
-	const timestamp_length = buf.get('B');
+	let timestamp_length = null;
 
-	if (buf.pos() + timestamp_length > end)
-		return null;
-
-	const timestamp = buf.get(timestamp_length);
-	const utilization = buf.get('B');
-	const noise = buf.get('B');
-	const number_of_neighbors = buf.get('!H');
-	const neighbors = [];
-
-	for (let h = 0; h < number_of_neighbors; h++) {
-		if (buf.pos() + 13 > end)
-			return null;
-
-		const bssid = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
-		const ssid_length = buf.get('B');
-
-		if (ssid_length > 0x20)
-			return null;
-
-		if (buf.pos() + ssid_length > end)
-			return null;
-
-		const ssid = buf.get(ssid_length);
-		const signal_strength = buf.get('B');
-		const channel_bandwidth_length = buf.get('B');
-
-		if (buf.pos() + channel_bandwidth_length > end)
-			return null;
-
-		const channel_bandwidth = buf.get(channel_bandwidth_length);
-
-		const bitfield = buf.get('B');
-		const bss_load_element_present = ((bitfield & 0b10000000) == 0b10000000);
-		const bss_color = bitfield & 0b00111111;
-
-		const channel_utilization = buf.get('B');
-		const station_count = buf.get('!H');
-
-		push(neighbors, {
-			bssid,
-			ssid,
-			signal_strength,
-			channel_bandwidth,
-			bss_load_element_present,
-			bss_color,
-			channel_utilization,
-			station_count,
-		});
+	if (scan_status == 0) {
+		timestamp_length = buf.get('B');
 	}
 
-	const aggregate_scan_duration = buf.get('!L');
+	let timestamp = null;
 
-	const bitfield = buf.get('B');
-	const scan_type = ((bitfield & 0b10000000) == 0b10000000);
+	if (scan_status == 0) {
+		if (buf.pos() + timestamp_length > end)
+			return null;
+
+		timestamp = buf.get(timestamp_length);
+	}
+
+	let utilization = null;
+
+	if (scan_status == 0) {
+		utilization = buf.get('B');
+	}
+
+	let noise = null;
+
+	if (scan_status == 0) {
+		noise = buf.get('B');
+	}
+
+	let number_of_neighbors = null;
+
+	if (scan_status == 0) {
+		number_of_neighbors = buf.get('!H');
+	}
+
+	let neighbors = null;
+
+	if (scan_status == 0) {
+		neighbors = [];
+
+		for (let i = 0; i < number_of_neighbors; i++) {
+			if (buf.pos() + 13 > end)
+				return null;
+
+			const bssid = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
+			const ssid_length = buf.get('B');
+
+			if (ssid_length > 0x20)
+				return null;
+
+			if (buf.pos() + ssid_length > end)
+				return null;
+
+			const ssid = buf.get(ssid_length);
+			const signal_strength = buf.get('B');
+			const channel_bandwidth_length = buf.get('B');
+
+			if (buf.pos() + channel_bandwidth_length > end)
+				return null;
+
+			const channel_bandwidth = buf.get(channel_bandwidth_length);
+
+			const bitfield = buf.get('B');
+			const bss_load_element_present = ((bitfield & 0b10000000) == 0b10000000);
+			const bss_color = bitfield & 0b00111111;
+
+			const channel_utilization = buf.get('B');
+			const station_count = buf.get('!H');
+
+			push(neighbors, {
+				bssid,
+				ssid,
+				signal_strength,
+				channel_bandwidth,
+				bss_load_element_present,
+				bss_color,
+				channel_utilization,
+				station_count,
+			});
+		}
+	}
+
+	let aggregate_scan_duration = null;
+
+	if (scan_status == 0) {
+		aggregate_scan_duration = buf.get('!L');
+	}
+
+	let active_scan = null;
+
+	if (scan_status == 0) {
+		const bitfield = buf.get('B');
+
+		active_scan = ((bitfield & 0b10000000) == 0b10000000);
+	}
 
 	return {
 		radio_unique_identifier,
@@ -5762,7 +5787,7 @@ decoder[0xa7] = (buf, end) => {
 		noise,
 		neighbors,
 		aggregate_scan_duration,
-		scan_type,
+		active_scan,
 	};
 };
 
@@ -6749,7 +6774,7 @@ decoder[0xca] = (buf, end) => {
 // 0xcb - Backhaul STA Radio Capabilities
 // Wi-Fi EasyMesh
 decoder[0xcb] = (buf, end) => {
-	if (buf.pos() + 13 > end)
+	if (buf.pos() + 7 > end)
 		return null;
 
 	const radio_unique_identifier = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
@@ -6757,7 +6782,11 @@ decoder[0xcb] = (buf, end) => {
 	const bitfield = buf.get('B');
 	const mac_address_included = ((bitfield & 0b10000000) == 0b10000000);
 
-	const mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
+	let mac_address = null;
+
+	if (mac_address_included == 1) {
+		mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
+	}
 
 	return {
 		radio_unique_identifier,
