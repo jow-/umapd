@@ -227,6 +227,40 @@ const I1905UbusProcedures = {
 
 			return req.defer();
 		}
+	},
+
+	query_backhaul_sta_capability: {
+		args: {
+			ubus_rpc_session: "00000000000000000000000000000000",
+			macaddress: "00:00:00:00:00:00"
+		},
+		call: function (req) {
+			const sent = proto_capab.query_backhaul_sta_capability(req.args.macaddress, response => {
+				if (!response)
+					return req.reply(null, 7 /* UBUS_STATUS_TIMEOUT */);
+
+				const ret = {
+					radios: {}
+				};
+
+				for (let sta_capa in response.get_tlvs(defs.TLV_BACKHAUL_STA_RADIO_CAPABILITIES)) {
+					if (sta_capa?.radio_unique_identifier) {
+						ret.radios[sta_capa.radio_unique_identifier] = {
+							supports_backhaul_sta: true,
+							backhaul_sta_connected: sta_capa.mac_address_included,
+							backhaul_sta_address: sta_capa.mac_address
+						};
+					}
+				}
+
+				return req.reply(ret);
+			});
+
+			if (!sent)
+				return req.reply(null, 4 /* UBUS_STATUS_NOT_FOUND */);
+
+			return req.defer();
+		}
 	}
 };
 
