@@ -18,14 +18,11 @@ import log from 'umap.log';
 import defs from 'umap.defs';
 import model from 'umap.model';
 import utils from 'umap.utils';
+import ubus from 'umap.ubusclient';
 import configuration from 'umap.configuration';
 
 import proto_autoconf from 'umap.proto.autoconf';
 import proto_capab from 'umap.proto.capabilities';
-
-import { connect as ubus_connect, error as ubus_error } from 'ubus';
-
-let ubusconn = null;
 
 const I1905UbusProcedures = {
 	get_intf_list: {
@@ -234,23 +231,12 @@ const I1905UbusProcedures = {
 };
 
 export default {
-	connect: function () {
-		ubusconn ??= ubus_connect();
-
-		return (ubusconn != null);
-	},
-
-	error: function () {
-		return ubus_error();
-	},
+	connect: () => ubus.connect(),
+	error: () => ubus.error(),
+	call: (...args) => ubus.call(...args),
 
 	publish: function () {
 		if (this.connect())
-			return ubusconn.publish("ieee1905", I1905UbusProcedures);
-	},
-
-	call: function (object, method, args) {
-		if (this.connect())
-			return ubusconn.call(object, method, args);
+			return ubus.publish("ieee1905", I1905UbusProcedures);
 	}
 };
