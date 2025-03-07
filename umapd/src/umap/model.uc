@@ -820,6 +820,7 @@ I1905Device = proto({
 				case defs.TLV_MULTI_AP_PROFILE:
 				case defs.TLV_PROFILE_2_AP_CAPABILITY:
 				case defs.TLV_PROFILE_2_AP_CAPABILITY:
+				case defs.TLV_BACKHAUL_STA_RADIO_CAPABILITIES:
 					if (!this.tlvs[tlv.type]) {
 						this.tlvs[tlv.type] = [now];
 					}
@@ -986,6 +987,18 @@ I1905Device = proto({
 		}
 
 		return interfaces;
+	},
+
+	getBackhaulSTACapability: function (radio_unique_identifier) {
+		const type = defs.TLV_BACKHAUL_STA_RADIO_CAPABILITIES;
+
+		for (let i = 1; i < length(this.tlvs[type]); i++) {
+			let sta_capa = decode_tlv(type, this.tlvs[type][i]);
+
+			if (radio_unique_identifier != null &&
+				sta_capa?.radio_unique_identifier == radio_unique_identifier)
+				return sta_capa;
+		}
 	},
 
 	dumpInformation: function () {
