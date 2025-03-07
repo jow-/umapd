@@ -466,17 +466,28 @@ const IProtoAutoConf = {
 				wscDetails.supported_authentication_types,
 				wscDetails.supported_encryption_types);
 
+			/* When the sending device announced backhaul station capability,
+			 * include configuration for the backhaul STA connection as well.
+			 * Synthesize the STA configuration by mirroring the (first)
+			 * backhaul BSS configuration and simply flipping the type. */
+			if (sender.getBackhaulSTACapability(radioCapabilities.radio_unique_identifier)) {
+				for (let bss in desiredBSSes) {
+					if (bss.type == 'backhaul') {
+						unshift(desiredBSSes, { ...bss, type: 'station' });
+						break;
+					}
+				}
+			}
+
 			if (length(desiredBSSes) == 0) {
 				push(desiredBSSes, {
+					type: 'disable',
 					auth_mask: wconst.WPS_AUTH_OPEN,
 					cipher_mask: wconst.WPS_ENCR_NONE,
 					band_mask: wconst.WPS_RF_2GHZ,
 					bssid: '00:00:00:00:00:00',
 					ssid: '',
 					network_key: '',
-					multi_ap: {
-						tear_down: true
-					}
 				})
 			}
 
@@ -491,14 +502,15 @@ const IProtoAutoConf = {
 					authentication_types: desiredBSS.auth_mask,
 					encryption_types: desiredBSS.cipher_mask,
 					band: desiredBSS.band_mask,
-					bssid: utils.ether_increment(bssid, i),
+					bssid: (desiredBSS.type in ['fronthaul', 'backhaul'])
+						? utils.ether_increment(bssid, i) : '00:00:00:00:00:00',
 					ssid: desiredBSS.ssid,
 					network_key: desiredBSS.key ?? '',
 					multi_ap: {
-						is_backhaul_sta: false,
+						is_backhaul_sta: (desiredBSS.type == 'station'),
 						is_backhaul_bss: (desiredBSS.type == 'backhaul'),
 						is_fronthaul_bss: (desiredBSS.type == 'fronthaul'),
-						tear_down: false,
+						tear_down: (desiredBSS.type == 'disable'),
 						multi_ap_profile1_backhaul_sta_assoc_dissallowed: false,
 						multi_ap_profile2_backhaul_sta_assoc_dissallowed: false
 					},

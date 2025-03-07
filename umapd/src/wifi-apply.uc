@@ -29,8 +29,13 @@ const lockfd = open('/var/lock/wifi-apply.lock', 'w');
 if (!lockfd || !lockfd.lock('x'))
 	die(`Unable to lock /var/lock/wifi-apply.lock: ${fserror()}`);
 
+let has_backhaul_sta = false;
+
 ctx.foreach('wireless', 'wifi-iface', (s) => {
-	if (s.device == radio && s.mode == 'ap') {
+	if (s.device == radio) {
+		if (s.mode == 'sta' && s.multi_ap == '1')
+			has_backhaul_sta = true;
+
 		ctx.delete('wireless', s['.name']);
 	}
 });
@@ -43,11 +48,14 @@ for (let bss in settings) {
 		break;
 	}
 
+	if (bss.multi_ap?.is_backhaul_sta && !has_backhaul_sta)
+		continue;
+
 	let sid = ctx.add('wireless', 'wifi-iface');
 	ctx.set('wireless', sid, 'device', radio);
-	ctx.set('wireless', sid, 'mode', 'ap');
+	ctx.set('wireless', sid, 'mode', bss.multi_ap?.is_backhaul_sta ? 'sta' : 'ap');
 	ctx.set('wireless', sid, 'ssid', bss.ssid);
-	ctx.set('wireless', sid, 'bssid', bss.bssid);
+	ctx.set('wireless', sid, 'bssid', bss.multi_ap?.is_backhaul_sta ? null : bss.bssid);
 	ctx.set('wireless', sid, 'network', network ?? 'lan');
 
 	// Determine base encryption type
@@ -84,7 +92,7 @@ for (let bss in settings) {
 	// Set multi ap operation mode
 	let multi_ap_mode = 0;
 
-	if (bss.multi_ap?.is_backhaul_bss)
+	if (bss.multi_ap?.is_backhaul_bss || bss.multi_ap?.is_backhaul_sta)
 		multi_ap_mode |= 1;
 
 	if (bss.multi_ap?.is_fronthaul_bss) {
