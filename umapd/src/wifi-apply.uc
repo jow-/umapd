@@ -108,6 +108,7 @@ for (let bss in settings) {
 	}
 
 	ctx.set('wireless', sid, 'multi_ap', multi_ap_mode);
+	ctx.set('wireless', sid, 'wds', (multi_ap_mode & 1) ? 1 : null);
 }
 
 ctx.set('wireless', radio, 'disabled', disabled ? '1' : '0');
