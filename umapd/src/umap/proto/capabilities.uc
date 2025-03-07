@@ -26,6 +26,30 @@ import { timer } from 'uloop';
 const REPLY_HANDLER_TIMEOUT = 3000;
 const callbacks = {};
 
+function run_callback(msg) {
+	if (!exists(callbacks, msg.mid))
+		return false;
+
+	callbacks[msg.mid][1].cancel();
+	callbacks[msg.mid][0](msg);
+
+	delete callbacks[msg.mid];
+
+	return true;
+}
+
+function register_callback(msg, func) {
+	if (type(func) == 'function') {
+		callbacks[msg.mid] = [
+			func,
+			timer(REPLY_HANDLER_TIMEOUT, () => {
+				callbacks[msg.mid][0](null);
+				delete callbacks[msg.mid];
+			})
+		];
+	}
+}
+
 const IProtoCapabilities = {
 	init: function () { },
 
@@ -37,15 +61,23 @@ const IProtoCapabilities = {
 
 		const query = cmdu.create(defs.MSG_AP_CAPABILITY_QUERY);
 
-		if (type(reply_cb) == 'function') {
-			callbacks[query.mid] = [
-				reply_cb,
-				timer(REPLY_HANDLER_TIMEOUT, () => {
-					callbacks[query.mid][0](null);
-					delete callbacks[query.mid];
-				})
-			];
-		}
+		register_callback(query, reply_cb);
+
+		for (let i1905lif in model.getLocalInterfaces())
+			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+
+		return true;
+	},
+
+	query_backhaul_sta_capability: function (address, reply_cb) {
+		const i1905dev = model.lookupDevice(address);
+
+		if (!i1905dev)
+			return null;
+
+		const query = cmdu.create(defs.MSG_BACKHAUL_STA_CAPABILITY_QUERY);
+
+		register_callback(query, reply_cb);
 
 		for (let i1905lif in model.getLocalInterfaces())
 			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
@@ -102,12 +134,31 @@ const IProtoCapabilities = {
 			return true;
 		}
 		else if (msg.type === defs.MSG_AP_CAPABILITY_REPORT) {
-			if (!exists(callbacks, msg.mid))
-				return false;
+			return run_callback(msg);
+		}
+		else if (msg.type === defs.MSG_BACKHAUL_STA_CAPABILITY_QUERY) {
+			const reply = cmdu.create(defs.MSG_BACKHAUL_STA_CAPABILITY_REPORT, msg.mid);
 
-			callbacks[msg.mid][1].cancel();
-			callbacks[msg.mid][0](msg);
-			delete callbacks[msg.mid];
+			for (let radio in wireless.radios) {
+				reply.add_tlv(defs.TLV_BACKHAUL_STA_RADIO_CAPABILITIES, {
+					radio_unique_identifier: radio.address,
+					mac_address: radio.getBackhaulStationAddress()
+				});
+			}
+
+			log.debug(`capabilities: sending backhaul STA capability report to ${srcmac}`);
+
+			reply.send(i1905lif.i1905sock, model.address, srcmac);
+
+			return true;
+		}
+		else if (msg.type === defs.MSG_BACKHAUL_STA_CAPABILITY_REPORT) {
+			if (!run_callback(msg) && model.isController) {
+				let i1905dev = model.lookupDevice(srcmac);
+
+				if (i1905dev)
+					i1905dev.updateTLVs(msg.get_tlvs_raw(defs.TLV_BACKHAUL_STA_RADIO_CAPABILITIES));
+			}
 
 			return true;
 		}
