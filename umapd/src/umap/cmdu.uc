@@ -14,7 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-import { pack, unpack, buffer } from 'struct';
+import { buffer } from 'struct';
+import { timer } from 'uloop';
 
 import utils from 'umap.utils';
 import log from 'umap.log';
@@ -39,6 +40,7 @@ const CMDU_MAX_CONCURRENT_REASSEMBLY = 16;
 const CMDU_MAX_PAYLOAD_SIZE = 102400;
 
 let reassembly = utils.Queue(CMDU_MAX_CONCURRENT_REASSEMBLY);
+let callbacks = {};
 
 function alloc_fragment(type, mid, fid, flags) {
 	return buffer().put('!BxHHBB', CMDU_MESSAGE_VERSION, type, mid, fid, flags);
@@ -455,5 +457,34 @@ export default {
 			fragment.put('*', this.buf.slice(offset));
 			socket.send(src, dest, fragment.pull());
 		}
+	},
+
+	on_reply: function (func, timeout) {
+		if (type(func) == 'function') {
+			// We assume that reply CMDU type IDs are always request type ID + 1
+			const id = sprintf('%04x%04x', this.type + 1, this.mid);
+
+			callbacks[id] = [
+				func,
+				timer(timeout ?? 1000, () => {
+					callbacks[id][0](null);
+					delete callbacks[id];
+				})
+			];
+		}
+	},
+
+	run_handler: function () {
+		const id = sprintf('%04x%04x', this.type, this.mid);
+
+		if (!exists(callbacks, id))
+			return false;
+
+		callbacks[id][1].cancel();
+		callbacks[id][0](this);
+
+		delete callbacks[id];
+
+		return true;
 	}
 };
