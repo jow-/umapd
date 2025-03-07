@@ -57,7 +57,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
         return;
     }
 
-    const handled = false
+    const handled = msg.run_handler()
         || proto_topology.handle_cmdu(i1905lif, dstmac, srcmac, msg)
         || proto_autoconf.handle_cmdu(i1905lif, dstmac, srcmac, msg)
         || proto_capab.handle_cmdu(i1905lif, dstmac, srcmac, msg)
