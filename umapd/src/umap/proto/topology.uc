@@ -105,12 +105,41 @@ function update_node_information() {
 		for (let i1905lif in i1905lifs)
 			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
 
-		// query higher layer info
-		query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
+		if (model.isController) {
+			// query higher layer info
+			query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
 
-		for (let i1905lif in i1905lifs)
-			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+			for (let i1905lif in i1905lifs)
+				query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+
+			// query backhaul sta capability
+			query = cmdu.create(defs.MSG_BACKHAUL_STA_CAPABILITY_QUERY);
+
+			for (let i1905lif in i1905lifs)
+				query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+		}
 	}
+}
+
+function send_information_queries(i1905lif, al_mac) {
+	let query;
+
+	// query device information
+	query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
+	query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
+
+	// query link metrics
+	query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
+	query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
+	query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
+
+	// query higher layer info
+	query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
+	query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
+
+	// query backhaul sta capability
+	query = cmdu.create(defs.MSG_BACKHAUL_STA_CAPABILITY_QUERY);
+	query.send(i1905lif.i1905sock, model.address, al_mac);
 }
 
 const IProtoTopology = {
@@ -163,20 +192,8 @@ const IProtoTopology = {
 
 			iface.updateCMDUTimestamp();
 
-			if (model.isController) {
-				// query device information
-				query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
-				query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
-
-				// query link metrics
-				query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
-				query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
-				query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
-
-				// query higher layer info
-				query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
-				query.send(i1905lif.i1905sock, i1905lif.address, al_mac);
-			}
+			if (model.isController)
+				send_information_queries(i1905lif, al_mac);
 
 			proto_autoconf.start_autoconfiguration();
 
@@ -262,21 +279,7 @@ const IProtoTopology = {
 				for (let neighbor in neigh_tlv.ieee1905_neighbors) {
 					if (!model.lookupDevice(neighbor.neighbor_al_mac_address)) {
 						model.addDevice(neighbor.neighbor_al_mac_address);
-
-						let query;
-
-						// query device information
-						query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
-						query.send(i1905lif.i1905sock, i1905lif.address, neighbor.neighbor_al_mac_address);
-
-						// query link metrics
-						query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
-						query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
-						query.send(i1905lif.i1905sock, i1905lif.address, neighbor.neighbor_al_mac_address);
-
-						// query higher layer info
-						query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
-						query.send(i1905lif.i1905sock, i1905lif.address, neighbor.neighbor_al_mac_address);
+						send_information_queries(i1905lif, neighbor.neighbor_al_mac_address);
 					}
 				}
 			}
