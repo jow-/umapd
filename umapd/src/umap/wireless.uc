@@ -19,6 +19,7 @@ import { popen, readfile } from 'fs';
 import { unpack, buffer } from 'struct';
 import { cursor } from 'uci';
 
+import ubus from 'umap.ubusclient';
 import log from 'umap.log';
 
 /* shared constants */
@@ -594,6 +595,17 @@ const IRadio = {
 		}
 
 		return bands;
+	},
+
+	getBackhaulStationAddress: function () {
+		for (let radio_name, radio_state in ubus.call('network.wireless', 'status')) {
+			if (radio_name != this.config)
+				continue;
+
+			for (let iface in radio_state?.interfaces)
+				if (iface.config?.mode == 'sta' && iface.config?.multi_ap == '1')
+					return readfile(`/sys/class/net/${iface.ifname}/address`, 17);
+		}
 	}
 };
 
