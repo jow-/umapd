@@ -326,6 +326,7 @@ function perform_wps(args) {
 		uci.set('wireless', args.config, 'key', wps_creds.key);
 		uci.set('wireless', args.config, 'ieee80211w', ieee80211w);
 		uci.set('wireless', args.config, 'multi_ap', ('multi-ap' in args) ? 1 : null);
+		uci.set('wireless', args.config, 'wds', ('multi-ap' in args) ? 1 : null);
 
 		uci.commit('network');
 		uci.commit('wireless');
