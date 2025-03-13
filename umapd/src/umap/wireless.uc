@@ -294,6 +294,10 @@ const IRadio = {
 		];
 	},
 
+	getSupportedOperatingClasses: function () {
+		return getSupportedOperatingClasses(this.info, this.band);
+	},
+
 	getBasicCapabilities: function () {
 		const caps = {
 			radio_unique_identifier: this.address,
