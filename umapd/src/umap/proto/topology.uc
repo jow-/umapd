@@ -140,6 +140,10 @@ function send_information_queries(i1905lif, al_mac) {
 	// query backhaul sta capability
 	query = cmdu.create(defs.MSG_BACKHAUL_STA_CAPABILITY_QUERY);
 	query.send(i1905lif.i1905sock, model.address, al_mac);
+
+	// query AP capabilities
+	query = cmdu.create(defs.MSG_AP_CAPABILITY_QUERY);
+	query.send(i1905lif.i1905sock, model.address, al_mac);
 }
 
 const IProtoTopology = {
