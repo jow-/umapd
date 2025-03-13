@@ -106,6 +106,22 @@ const IProtoCapabilities = {
 
 			return true;
 		}
+		else if (msg.type === defs.MSG_AP_CAPABILITY_REPORT) {
+			if (!model.isController)
+				return false;
+
+			let i1905dev = model.lookupDevice(srcmac);
+
+			if (i1905dev)
+				i1905dev.updateTLVs(msg.get_tlvs_raw(
+					defs.TLV_AP_RADIO_BASIC_CAPABILITIES,
+					defs.TLV_AP_RADIO_ADVANCED_CAPABILITIES,
+					defs.TLV_AP_HT_CAPABILITIES,
+					defs.TLV_AP_VHT_CAPABILITIES,
+					defs.TLV_AP_HE_CAPABILITIES));
+
+			return true;
+		}
 		else if (msg.type === defs.MSG_BACKHAUL_STA_CAPABILITY_QUERY) {
 			const reply = cmdu.create(defs.MSG_BACKHAUL_STA_CAPABILITY_REPORT, msg.mid);
 
