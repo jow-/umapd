@@ -811,16 +811,12 @@ I1905Device = proto({
 				case defs.TLV_AP_METRICS:
 				case defs.TLV_MULTI_AP_PROFILE:
 				case defs.TLV_PROFILE_2_AP_CAPABILITY:
-				case defs.TLV_SUPPORTED_SERVICE:
-				case defs.TLV_SEARCHED_SERVICE:
-				case defs.TLV_AP_RADIO_IDENTIFIER:
-				case defs.TLV_AP_OPERATIONAL_BSS:
-				case defs.TLV_ASSOCIATED_CLIENTS:
-				case defs.TLV_AP_METRICS:
-				case defs.TLV_MULTI_AP_PROFILE:
-				case defs.TLV_PROFILE_2_AP_CAPABILITY:
-				case defs.TLV_PROFILE_2_AP_CAPABILITY:
 				case defs.TLV_BACKHAUL_STA_RADIO_CAPABILITIES:
+				case defs.TLV_AP_RADIO_BASIC_CAPABILITIES:
+				case defs.TLV_AP_RADIO_ADVANCED_CAPABILITIES:
+				case defs.TLV_AP_HT_CAPABILITIES:
+				case defs.TLV_AP_VHT_CAPABILITIES:
+				case defs.TLV_AP_HE_CAPABILITIES:
 					if (!this.tlvs[tlv.type]) {
 						this.tlvs[tlv.type] = [now];
 					}
@@ -991,14 +987,20 @@ I1905Device = proto({
 
 	getBackhaulSTACapability: function (radio_unique_identifier) {
 		const type = defs.TLV_BACKHAUL_STA_RADIO_CAPABILITIES;
+		const ruid = hexdec(radio_unique_identifier, ':');
 
-		for (let i = 1; i < length(this.tlvs[type]); i++) {
-			let sta_capa = decode_tlv(type, this.tlvs[type][i]);
+		for (let i = 1; i < length(this.tlvs[type]); i++)
+			if (ruid != null && substr(this.tlvs[type][i], 0, 6) === ruid)
+				return decode_tlv(type, this.tlvs[type][i]);
+	},
 
-			if (radio_unique_identifier != null &&
-				sta_capa?.radio_unique_identifier == radio_unique_identifier)
-				return sta_capa;
-		}
+	getBasicAPCapability: function (radio_unique_identifier) {
+		const type = defs.TLV_AP_RADIO_BASIC_CAPABILITIES;
+		const ruid = hexdec(radio_unique_identifier, ':');
+
+		for (let i = 1; i < length(this.tlvs[type]); i++)
+			if (ruid != null && substr(this.tlvs[type][i], 0, 6) === ruid)
+				return decode_tlv(type, this.tlvs[type][i]);
 	},
 
 	dumpInformation: function () {
