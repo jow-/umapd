@@ -227,12 +227,12 @@ export default function () {
         }
     });
 
-    if (!('no-ubus' in opts) && !ubus.publish())
-        log.warn(`Unable to publish ieee1905 object: ${ubus.error()}`);
-
     proto_topology.init();
     proto_autoconf.init();
     proto_capab.init();
+
+    if (!('no-ubus' in opts) && !ubus.publish())
+        log.warn(`Unable to publish ieee1905 object: ${ubus.error()}`);
 
     if (length(model.interfaces) > 0)
         proto_topology.start();
