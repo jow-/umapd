@@ -997,10 +997,15 @@ I1905Device = proto({
 	getBasicAPCapability: function (radio_unique_identifier) {
 		const type = defs.TLV_AP_RADIO_BASIC_CAPABILITIES;
 		const ruid = hexdec(radio_unique_identifier, ':');
+		let rv;
 
 		for (let i = 1; i < length(this.tlvs[type]); i++)
 			if (ruid != null && substr(this.tlvs[type][i], 0, 6) === ruid)
 				return decode_tlv(type, this.tlvs[type][i]);
+			else if (ruid == null)
+				push(rv ??= [], decode_tlv(type, this.tlvs[type][i]));
+
+		return rv;
 	},
 
 	dumpInformation: function () {
