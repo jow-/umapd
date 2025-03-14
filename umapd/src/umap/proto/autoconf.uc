@@ -20,6 +20,7 @@ import utils from 'umap.utils';
 import model from 'umap.model';
 import cmdu from 'umap.cmdu';
 import defs from 'umap.defs';
+import ubus from 'umap.ubus';
 import log from 'umap.log';
 
 import * as wsc from 'umap.wsc';
@@ -298,6 +299,7 @@ const IProtoAutoConf = {
 	init: function () {
 		if (model.isController) {
 			configuration.reload();
+			ubus.register('renew_ap_autoconfig', {}, this.renew_ap_autoconfig);
 		}
 		else {
 			const sessions = this.sessions;
@@ -311,11 +313,18 @@ const IProtoAutoConf = {
 		}
 	},
 
-	renew: function () {
+	renew_ap_autoconfig: function (req) {
 		if (!model.isController)
-			return false;
+			return req.reply(null, 8 /* UBUS_STATUS_NOT_SUPPORTED */);
+
+		configuration.reload();
+
+		const i1905self = model.getLocalDevice();
 
 		for (let i1905dev in model.getDevices()) {
+			if (i1905dev === i1905self)
+				continue;
+
 			const renew = cmdu.create(defs.MSG_AP_AUTOCONFIGURATION_RENEW);
 
 			renew.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
@@ -334,15 +343,17 @@ const IProtoAutoConf = {
 			 * hardcoded 2.4GHz */
 			renew.add_tlv(defs.TLV_SUPPORTED_FREQUENCY_BAND, 0x00 /* 2.4GHz */);
 
-			callbacks[renew.mid] = {
+			const dstmac = i1905dev.al_address;
+
+			callbacks[dstmac] = {
 				try: 0,
-				dstmac: i1905dev.al_address,
+				dstmac: dstmac,
 				timeout: timer(1000, () => {
-					const s = callbacks[renew.mid];
+					const s = callbacks[dstmac];
 
 					if (s.try >= 3) {
 						log.warn(`autoconf: device ${s.dstmac} did not acknowledge reconfig - connection lost?`);
-						delete callbacks[renew.mid];
+						delete callbacks[s.dstmac];
 						return;
 					}
 
@@ -360,7 +371,7 @@ const IProtoAutoConf = {
 				renew.send(i1905lif.i1905sock, model.address, i1905dev.al_address, cmdu.CMDU_F_ISRELAY);
 		}
 
-		return true;
+		return req.reply({ success: true });
 	},
 
 	start_autoconfiguration: function () {
@@ -427,6 +438,8 @@ const IProtoAutoConf = {
 
 			//reply.send(i1905lif.i1905sock, dstmac, srcmac);
 			reply.send(i1905lif.i1905sock, model.address, sender.al_address);
+
+			return true;
 		}
 		else if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_WSC) {
 			log.debug(`autoconf: received AP Auto-Configuration WSC message`);
@@ -454,13 +467,13 @@ const IProtoAutoConf = {
 			if (wscType != 1)
 				return log.warn(`autoconf: received AP Auto-Configuration WSC message with unxpected type (${wscType ?? 'unknown'})`);
 
-			const s = callbacks[msg.mid];
+			const s = callbacks[srcmac];
 
 			if (s) {
 				log.info(`autoconfig: device ${s.dstmac} acknowledged renew request`);
 
 				s.timeout.cancel();
-				delete callbacks[msg.mid];
+				delete callbacks[srcmac];
 			}
 
 			const wscDetails = wsc.wscProcessM1(wscFrame);
@@ -523,6 +536,8 @@ const IProtoAutoConf = {
 			}
 
 			reply.send(i1905lif.i1905sock, model.address, sender.al_address);
+
+			return true;
 		}
 	},
 
