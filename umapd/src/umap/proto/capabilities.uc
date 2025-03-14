@@ -18,44 +18,106 @@ import log from 'umap.log';
 import model from 'umap.model';
 import cmdu from 'umap.cmdu';
 import defs from 'umap.defs';
+import ubus from 'umap.ubus';
+import utils from 'umap.utils';
 import wireless from 'umap.wireless';
 
 
 const REPLY_HANDLER_TIMEOUT = 3000;
 
 const IProtoCapabilities = {
-	init: function () { },
+	init: function () {
+		ubus.register('query_ap_capability',
+			{ macaddress: "00:00:00:00:00:00" },
+			this.query_ap_capability);
 
-	query_ap_capability: function (address, reply_cb) {
-		const i1905dev = model.lookupDevice(address);
+		ubus.register('query_backhaul_sta_capability',
+			{ macaddress: "00:00:00:00:00:00" },
+			this.query_backhaul_sta_capability);
+	},
+
+	query_ap_capability: function (req) {
+		const i1905dev = model.lookupDevice(req.args.macaddress);
 
 		if (!i1905dev)
-			return null;
+			return req.reply(null, 4 /* UBUS_STATUS_NOT_FOUND */);;
 
 		const query = cmdu.create(defs.MSG_AP_CAPABILITY_QUERY);
 
-		query.on_reply(reply_cb, REPLY_HANDLER_TIMEOUT);
+		query.on_reply(response => {
+			if (!response)
+				return req.reply(null, 7 /* UBUS_STATUS_TIMEOUT */);
+
+			const ret = {
+				ap_capability: response.get_tlv(defs.TLV_AP_CAPABILITY),
+				radios: {}
+			};
+
+			for (let tt in [
+				defs.TLV_AP_RADIO_BASIC_CAPABILITIES,
+				defs.TLV_AP_HT_CAPABILITIES,
+				defs.TLV_AP_VHT_CAPABILITIES,
+				defs.TLV_AP_HE_CAPABILITIES,
+				defs.TLV_AP_RADIO_ADVANCED_CAPABILITIES,
+			]) {
+				for (let data in response.get_tlvs(tt)) {
+					const mac = data?.radio_unique_identifier;
+
+					if (!mac)
+						continue;
+
+					delete data.radio_unique_identifier;
+
+					if (tt == defs.TLV_AP_HE_CAPABILITIES)
+						data.supported_he_mcs = hexenc(data.supported_he_mcs);
+
+					ret.radios[mac] ??= {};
+					ret.radios[mac][lc(utils.tlv_type_ntoa(tt))] = data;
+				}
+			}
+
+			return req.reply(ret);
+		}, REPLY_HANDLER_TIMEOUT);
 
 		for (let i1905lif in model.getLocalInterfaces())
 			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
 
-		return true;
+		return req.defer();
 	},
 
-	query_backhaul_sta_capability: function (address, reply_cb) {
-		const i1905dev = model.lookupDevice(address);
+	query_backhaul_sta_capability: function (req) {
+		const i1905dev = model.lookupDevice(req.args.macaddress);
 
 		if (!i1905dev)
-			return null;
+			return req.reply(null, 4 /* UBUS_STATUS_NOT_FOUND */);
 
 		const query = cmdu.create(defs.MSG_BACKHAUL_STA_CAPABILITY_QUERY);
 
-		query.on_reply(reply_cb, REPLY_HANDLER_TIMEOUT);
+		query.on_reply(response => {
+			if (!response)
+				return req.reply(null, 7 /* UBUS_STATUS_TIMEOUT */);
+
+			const ret = {
+				radios: {}
+			};
+
+			for (let sta_capa in response.get_tlvs(defs.TLV_BACKHAUL_STA_RADIO_CAPABILITIES)) {
+				if (sta_capa?.radio_unique_identifier) {
+					ret.radios[sta_capa.radio_unique_identifier] = {
+						supports_backhaul_sta: true,
+						backhaul_sta_connected: sta_capa.mac_address_included,
+						backhaul_sta_address: sta_capa.mac_address
+					};
+				}
+			}
+
+			return req.reply(ret);
+		}, REPLY_HANDLER_TIMEOUT);
 
 		for (let i1905lif in model.getLocalInterfaces())
 			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
 
-		return true;
+		return req.defer();
 	},
 
 	handle_cmdu: function (i1905lif, dstmac, srcmac, msg) {

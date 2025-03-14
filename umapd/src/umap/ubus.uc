@@ -22,7 +22,6 @@ import ubus from 'umap.ubusclient';
 import configuration from 'umap.configuration';
 
 import proto_autoconf from 'umap.proto.autoconf';
-import proto_capab from 'umap.proto.capabilities';
 
 const I1905UbusProcedures = {
 	get_intf_list: {
@@ -180,88 +179,6 @@ const I1905UbusProcedures = {
 			req.reply({ success: true });
 		}
 	},
-
-	query_ap_capability: {
-		args: {
-			ubus_rpc_session: "00000000000000000000000000000000",
-			macaddress: "00:00:00:00:00:00"
-		},
-		call: function (req) {
-			const sent = proto_capab.query_ap_capability(req.args.macaddress, response => {
-				if (!response)
-					return req.reply(null, 7 /* UBUS_STATUS_TIMEOUT */);
-
-				const ret = {
-					ap_capability: response.get_tlv(defs.TLV_AP_CAPABILITY),
-					radios: {}
-				};
-
-				for (let tt in [
-					defs.TLV_AP_RADIO_BASIC_CAPABILITIES,
-					defs.TLV_AP_HT_CAPABILITIES,
-					defs.TLV_AP_VHT_CAPABILITIES,
-					defs.TLV_AP_HE_CAPABILITIES,
-					defs.TLV_AP_RADIO_ADVANCED_CAPABILITIES,
-				]) {
-					for (let data in response.get_tlvs(tt)) {
-						const mac = data?.radio_unique_identifier;
-
-						if (!mac)
-							continue;
-
-						delete data.radio_unique_identifier;
-
-						if (tt == defs.TLV_AP_HE_CAPABILITIES)
-							data.supported_he_mcs = hexenc(data.supported_he_mcs);
-
-						ret.radios[mac] ??= {};
-						ret.radios[mac][lc(utils.tlv_type_ntoa(tt))] = data;
-					}
-				}
-
-				return req.reply(ret);
-			});
-
-			if (!sent)
-				return req.reply(null, 4 /* UBUS_STATUS_NOT_FOUND */);
-
-			return req.defer();
-		}
-	},
-
-	query_backhaul_sta_capability: {
-		args: {
-			ubus_rpc_session: "00000000000000000000000000000000",
-			macaddress: "00:00:00:00:00:00"
-		},
-		call: function (req) {
-			const sent = proto_capab.query_backhaul_sta_capability(req.args.macaddress, response => {
-				if (!response)
-					return req.reply(null, 7 /* UBUS_STATUS_TIMEOUT */);
-
-				const ret = {
-					radios: {}
-				};
-
-				for (let sta_capa in response.get_tlvs(defs.TLV_BACKHAUL_STA_RADIO_CAPABILITIES)) {
-					if (sta_capa?.radio_unique_identifier) {
-						ret.radios[sta_capa.radio_unique_identifier] = {
-							supports_backhaul_sta: true,
-							backhaul_sta_connected: sta_capa.mac_address_included,
-							backhaul_sta_address: sta_capa.mac_address
-						};
-					}
-				}
-
-				return req.reply(ret);
-			});
-
-			if (!sent)
-				return req.reply(null, 4 /* UBUS_STATUS_NOT_FOUND */);
-
-			return req.defer();
-		}
-	}
 };
 
 let namespace;
