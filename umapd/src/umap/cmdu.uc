@@ -459,10 +459,10 @@ export default {
 		}
 	},
 
-	on_reply: function (func, timeout) {
+	on_reply: function (func, timeout, reply_type) {
 		if (type(func) == 'function') {
 			// We assume that reply CMDU type IDs are always request type ID + 1
-			const id = sprintf('%04x%04x', this.type + 1, this.mid);
+			const id = sprintf('%04x%04x', reply_type ?? this.type + 1, this.mid);
 
 			callbacks[id] = [
 				func,
