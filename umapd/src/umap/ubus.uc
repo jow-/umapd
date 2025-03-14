@@ -264,13 +264,30 @@ const I1905UbusProcedures = {
 	}
 };
 
+let namespace;
+
 export default {
 	connect: () => ubus.connect(),
 	error: () => ubus.error(),
 	call: (...args) => ubus.call(...args),
 
+	register: function (method, argspec, func) {
+		I1905UbusProcedures[method] = {
+			args: {
+				...(argspec ?? {}),
+				ubus_rpc_session: '00000000000000000000000000000000'
+			},
+			call: func
+		};
+	},
+
 	publish: function () {
 		if (this.connect())
-			return ubus.publish("ieee1905", I1905UbusProcedures);
+			return (namespace ??= ubus.publish("ieee1905", I1905UbusProcedures));
+	},
+
+	notify: function (...args) {
+		if (namespace && namespace.subscribed())
+			return namespace.notify(...args);
 	}
 };
