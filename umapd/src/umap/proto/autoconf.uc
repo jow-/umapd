@@ -436,6 +436,9 @@ const IProtoAutoConf = {
 			if (!sender)
 				return log.warn(`autoconf: received AP Auto-Configuration WSC message from unknown device ${srcmac}`);
 
+			if (!sender.haveStaCapabilities)
+				return log.warn(`autoconf: ignoring request from device ${srcmac} still in topology exchange`);
+
 			const radioCapabilities = msg.get_tlv(defs.TLV_AP_RADIO_BASIC_CAPABILITIES);
 
 			if (radioCapabilities == null)
