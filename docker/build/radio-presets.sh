@@ -20,7 +20,7 @@ while uci -q set "wireless.@wifi-device[$radio_num].country=US"; do
     first_channel=$(
         iw phy "$phy" info | \
             grep -vE '\b(disabled|no IR)\b' | \
-            sed -rne "s#^\t+\* ($freq_pattern) MHz \[([0-9]+)\] .+\$#\2#p" | \
+            sed -rne "s#^\t+\* ($freq_pattern)\.?[0-9]* MHz \[([0-9]+)\] .+\$#\2#p" | \
             head -n1
     )
 

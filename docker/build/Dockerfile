@@ -13,21 +13,22 @@ RUN apt-get update && apt-get install -y \
 		python3-setuptools \
 		rsync \
 		unzip \
+		zstd \
 		wget \
 	&& rm -rf /var/lib/apt/lists/*
 
 USER ubuntu
 WORKDIR /build
 
-ADD --chown=ubuntu --checksum=sha256:9e5b6813a3f810123391f5f3ea10dfd1c14be1a880f410c70ec4424bbd1573d2 https://downloads.openwrt.org/releases/23.05.5/targets/x86/64/openwrt-sdk-23.05.5-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz /tmp/sdk.archive
-ADD --chown=ubuntu --checksum=sha256:383311300e1fd796f5a39bf09ad87bcedec61a7f09263f79cd1352757a3573a9 https://downloads.openwrt.org/releases/23.05.5/targets/x86/64/openwrt-23.05.5-x86-64-rootfs.tar.gz /tmp/rootfs.archive
+ADD --chown=ubuntu --checksum=sha256:94f55f15599b57e3b341681d6deffa8e6ce38fc829e0ed14ad5c4f4a4d85a4dc https://downloads.openwrt.org/releases/24.10.0/targets/x86/64/openwrt-sdk-24.10.0-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst /tmp/sdk.archive
+ADD --chown=ubuntu --checksum=sha256:25c1e8682bd3c4950be6480d859257bb5c86d5be36589824d43141986fe64d93 https://downloads.openwrt.org/releases/24.10.0/targets/x86/64/openwrt-24.10.0-x86-64-rootfs.tar.gz /tmp/rootfs.archive
 
 RUN tar -C /build/ --strip-components=1 -xf /tmp/sdk.archive \
 	&& { \
 		echo "src-link local /src/"; \
-		echo "src-git base https://github.com/openwrt/openwrt.git;openwrt-23.05"; \
-		echo "src-git packages https://github.com/openwrt/packages.git;openwrt-23.05"; \
-		echo "src-git luci https://github.com/openwrt/luci.git;openwrt-23.05"; \
+		echo "src-git base https://github.com/openwrt/openwrt.git;openwrt-24.10"; \
+		echo "src-git packages https://github.com/openwrt/packages.git;openwrt-24.10"; \
+		echo "src-git luci https://github.com/openwrt/luci.git;openwrt-24.10"; \
 	} > feeds.conf \
 	&& ./scripts/feeds update base luci packages
 
