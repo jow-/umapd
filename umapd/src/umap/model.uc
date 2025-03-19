@@ -658,14 +658,29 @@ const I1905LocalInterface = proto({
 
 const I1905LocalBridge = proto({
 	new: function (brname) {
+		let br = proto({
+			brname,
+			ports: {},
+			pending: true
+		}, this);
+
+		br.init();
+
+		return br;
+	},
+
+	init: function() {
+		if (!this.pending)
+			return true;
+
 		let bridge, vlan, link;
-		let upper = brname;
+		let upper = this.brname;
 
 		while (true) {
 			link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: upper });
 
 			if (!link)
-				return die(`Failed to get link information for device ${upper}: ${rterror()}`);
+				return log.info(`Interface ${upper} not present on the system, deferring bridge setup`);
 
 			switch (link.linkinfo?.type) {
 				case 'vlan':
@@ -682,26 +697,23 @@ const I1905LocalBridge = proto({
 		}
 
 		if (!bridge)
-			die(`Network device ${brname} is not a bridge interface`);
+			return log.warn(`Network device ${this.brname} is not a bridge interface`);
 
 		log.info(`Observing local bridge ${link.ifname} (${link.address}${vlan ? `, VLAN ${vlan}` : ''})`);
 
-		let br = proto({
-			brname,
-			vlan,
-			link,
-			ports: {}
-		}, this);
+		this.vlan = vlan;
+		this.link = link;
+		this.pending = false;
 
-		for (let link in resolve_bridge_ports(brname))
-			br.addPort(link, link.vlan != null);
+		for (let link in resolve_bridge_ports(this.brname))
+			this.addPort(link, link.vlan != null);
 
-		return br;
+		return true;
 	},
 
 	addPort: function (link, tagged) {
 		if (exists(this.ports, link.ifname))
-			die(`Device ${link.ifname} is already registered as bridge ${this.brname} port`);
+			return this.ports[link.ifname];
 
 		let i1905sock, lldpsock;
 
@@ -1227,6 +1239,10 @@ model = proto({
 		rtlistener(function (rtevent) {
 			//try {
 			if (rtevent.cmd == rtconst.RTM_NEWLINK) {
+				/* pending bridge came online */
+				if (bridges[rtevent.msg.ifname]?.pending)
+					return bridges[rtevent.msg.ifname].init();
+
 				let brname = rtevent.msg.master;
 				let brvlan = rtevent.msg.af_spec?.bridge?.bridge_vlan_info?.[0]?.vid;
 
