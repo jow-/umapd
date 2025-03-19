@@ -144,8 +144,10 @@ const IProtoCapabilities = {
 
 			let i1905dev = model.lookupDevice(srcmac);
 
-			if (i1905dev)
+			if (i1905dev) {
+				i1905dev.haveStaCapabilities = true;
 				i1905dev.updateTLVs(msg.get_tlvs_raw(defs.TLV_BACKHAUL_STA_RADIO_CAPABILITIES));
+			}
 
 			return true;
 		}
