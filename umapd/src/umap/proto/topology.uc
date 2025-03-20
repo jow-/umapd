@@ -19,7 +19,6 @@ import model from 'umap.model';
 import cmdu from 'umap.cmdu';
 import lldp from 'umap.lldp';
 import defs from 'umap.defs';
-import ubus from 'umap.ubus';
 import utils from 'umap.utils';
 
 import proto_autoconf from 'umap.proto.autoconf';
@@ -27,7 +26,6 @@ import proto_autoconf from 'umap.proto.autoconf';
 import { timer } from 'uloop';
 
 
-const TOPOLOGY_SELFUPDATE_DELAY = 250;
 const TOPOLOGY_DISCOVERY_DELAY = 500;
 
 const TOPOLOGY_DISCOVERY_INTERVAL = 60000;
@@ -41,7 +39,7 @@ let started = false;
 function update_self() {
 	this.set(TOPOLOGY_SELFUPDATE_INTERVAL);
 
-	model.updateSelf(ubus.call('network.interface', 'dump')?.interface ?? []);
+	model.updateSelf();
 }
 
 function cleanup_model() {
@@ -148,14 +146,14 @@ function send_information_queries(i1905lif, al_mac) {
 
 const IProtoTopology = {
 	init: function () {
-
+		model.updateSelf();
 	},
 
 	start: function () {
 		if (started)
 			return;
 
-		timer(TOPOLOGY_SELFUPDATE_DELAY, update_self);
+		timer(TOPOLOGY_SELFUPDATE_INTERVAL, update_self);
 		timer(TOPOLOGY_DISCOVERY_DELAY, emit_topology_discovery);
 		timer(TOPOLOGY_SENDNOTIFY_INTERVAL, emit_topology_notification);
 		timer(TOPOLOGY_NODEUPDATE_INTERVAL, update_node_information);
