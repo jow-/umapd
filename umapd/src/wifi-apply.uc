@@ -2,16 +2,17 @@
 
 'use strict';
 
+import { connect as ubus_connect, error as ubus_error } from 'ubus';
 import { open, error as fserror } from 'fs';
-import { cursor } from 'uci';
 
-const ctx = cursor();
 const radio = getenv('RADIO');
 const network = getenv('NETWORK');
 const settings = json(ARGV[0]);
 
 if (type(settings) != 'array' || type(radio) != 'string')
 	die("Do not execute this program directly");
+
+const STATEFILE_PATH = '/etc/umap-wireless-status.json';
 
 const WPS_AUTH_OPEN = 0x0001;
 const WPS_AUTH_WPAPSK = 0x0002;
@@ -29,34 +30,93 @@ const lockfd = open('/var/lock/wifi-apply.lock', 'w');
 if (!lockfd || !lockfd.lock('x'))
 	die(`Unable to lock /var/lock/wifi-apply.lock: ${fserror()}`);
 
+function equal(a, b) {
+	const t1 = type(a), t2 = type(b);
+
+	if (t1 != t2)
+		return false;
+
+	if (t1 == 'object') {
+		if (length(a) != length(b))
+			return false;
+
+		for (let k, v in a)
+			if (!(k in b) || !equal(v, b[k]))
+				return false;
+
+		for (let k in b)
+			if (!(k in a))
+				return false;
+	}
+	else if (t1 == 'array') {
+		if (length(a) != length(b))
+			return false;
+
+		for (let i, v in a)
+			if (!equal(v, b[i]))
+				return false;
+	}
+	else if (a != b) {
+		return false;
+	}
+
+	return true;
+}
+
+function bss_cmp(a, b) {
+	for (let field in ['mode', 'ssid', 'bssid'])
+		if (a[field] != b[field])
+			return (a[field] < b[field]) ? -1 : 1;
+
+	return 0;
+}
+
+
+const ubus = ubus_connect();
+
+if (!ubus)
+	die(`Unable to connect to ubus: ${ubus_error()}`);
+
 let has_backhaul_sta = false;
 
-ctx.foreach('wireless', 'wifi-iface', (s) => {
-	if (s.device == radio) {
-		if (s.mode == 'sta' && s.multi_ap == '1')
-			has_backhaul_sta = true;
+const new_instances = { [radio]: {} };
+const cur_instances = ubus.call('service', 'get_data', {
+	name: 'umap-agent',
+	type: 'wifi-iface'
+})?.['umap-agent']?.['wifi-iface'] ?? {};
 
-		ctx.delete('wireless', s['.name']);
+for (let state_radio, state_bsses in cur_instances) {
+	if (state_radio != radio) {
+		new_instances[state_radio] = state_bsses;
 	}
-});
+	else {
+		for (let key, bss in state_bsses)
+			if (bss.config?.mode == 'sta' && bss.config?.multi_ap == 1)
+				has_backhaul_sta = true;
+	}
+}
 
-let disabled = false;
+const counter = {};
 
-for (let bss in settings) {
-	if (bss.multi_ap?.tear_down) {
-		disabled = true;
+for (let bss in sort(settings, bss_cmp)) {
+	if (bss.multi_ap?.tear_down)
 		break;
-	}
 
 	if (bss.multi_ap?.is_backhaul_sta && !has_backhaul_sta)
 		continue;
 
-	let sid = ctx.add('wireless', 'wifi-iface');
-	ctx.set('wireless', sid, 'device', radio);
-	ctx.set('wireless', sid, 'mode', bss.multi_ap?.is_backhaul_sta ? 'sta' : 'ap');
-	ctx.set('wireless', sid, 'ssid', bss.ssid);
-	ctx.set('wireless', sid, 'bssid', bss.multi_ap?.is_backhaul_sta ? null : bss.bssid);
-	ctx.set('wireless', sid, 'network', network ?? 'lan');
+	const mode = bss.multi_ap?.is_backhaul_sta ? 'sta' : 'ap';
+	const instance = new_instances[radio][`${mode}${counter[mode]++}`] = {
+		device: radio,
+		config: {
+			mode: mode,
+			ssid: bss.ssid,
+			network: network ?? 'lan',
+		}
+	};
+
+	if (!bss.multi_ap?.is_backhaul_sta)
+		instance.config.bssid = bss.bssid;
 
 	// Determine base encryption type
 	let enc;
@@ -84,10 +144,10 @@ for (let bss in settings) {
 	if (length(ciphers))
 		enc += '+' + join('+', ciphers);
 
-	ctx.set('wireless', sid, 'encryption', enc);
+	instance.config.encryption = enc;
 
 	if (bss.encryption_types & (WPS_ENCR_TKIP | WPS_ENCR_AES))
-		ctx.set('wireless', sid, 'key', bss.network_key);
+		instance.config.key = bss.network_key;
 
 	// Set multi ap operation mode
 	let multi_ap_mode = 0;
@@ -106,23 +166,40 @@ for (let bss in settings) {
 				continue;
 
 			if (bss.authentication_types & (WPS_AUTH_WPAPSK | WPS_AUTH_WPA2PSK))
-				ctx.set('wireless', sid, 'wps_pushbutton', 1);
+				instance.config.wps_pushbutton = true;
 
-			ctx.set('wireless', sid, 'multi_ap_backhaul_ssid', other_bss.ssid);
+			instance.config.multi_ap_backhaul_ssid = other_bss.ssid;
 
 			if (other_bss.encryption_types & (WPS_ENCR_TKIP | WPS_ENCR_AES))
-				ctx.set('wireless', sid, 'multi_ap_backhaul_key', other_bss.network_key);
+				instance.config.multi_ap_backhaul_key = other_bss.network_key;
 		}
 	}
 
-	ctx.set('wireless', sid, 'multi_ap', multi_ap_mode);
-	ctx.set('wireless', sid, 'wds', (multi_ap_mode & 1) ? 1 : null);
+	if (multi_ap_mode > 0)
+		instance.config.multi_ap = multi_ap_mode;
+
+	if (multi_ap_mode & 1)
+		instance.config.wds = true;
 }
 
-ctx.set('wireless', radio, 'disabled', disabled ? '1' : '0');
-ctx.commit('wireless');
+if (!equal(cur_instances, new_instances)) {
+	ubus.call('service', 'set', {
+		name: 'umap-agent',
+		data: { 'wifi-iface': new_instances }
+	});
 
-system(['/sbin/wifi', 'up', radio]);
+	ubus.call('network', 'reload');
+
+	const statefile = open(STATEFILE_PATH, 'w');
+
+	if (statefile) {
+		statefile.write(new_instances);
+		statefile.close();
+	}
+	else {
+		warn(`Unable to open ${STATEFILE_PATH} for writing: ${fserror()}\n`);
+	}
+}
 
 lockfd.lock('u');
 lockfd.close();
