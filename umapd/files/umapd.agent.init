@@ -6,6 +6,8 @@ USE_PROCD=1
 NAME=umap-agent
 PROG=/usr/sbin/umapd
 
+network_reload=0
+
 start_service() {
 	local interfaces=$(uci -q get umapd.@agent[0].interface)
 	local verbosity=$(uci -q get umapd.@agent[0].verbosity)
@@ -70,6 +72,20 @@ start_service() {
     done
 
 	procd_close_instance
+}
+
+service_data() {
+	if [ -f /etc/umap-wireless-status.json ]; then
+		json_add_object wifi-iface
+		eval "json_init() { :; }; $(jshn -R /etc/umap-wireless-status.json)"
+		json_close_object
+
+		network_reload=1
+	fi
+}
+
+service_started() {
+	[ $network_reload = 0 ] || ubus call network reload
 }
 
 service_triggers() {
