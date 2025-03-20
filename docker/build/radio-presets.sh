@@ -32,6 +32,7 @@ while uci -q set "wireless.@wifi-device[$radio_num].country=US"; do
     uci set "wireless.@wifi-device[$radio_num].ldpc=0"
     uci set "wireless.@wifi-device[$radio_num].rx_stbc=0"
     uci set "wireless.@wifi-device[$radio_num].max_amsdu=0"
+    uci set "wireless.@wifi-device[$radio_num].disabled=0"
 
     case " $(uci get umapd.@agent[0].radio) " in
         *" $phy "*) : ;;
@@ -39,6 +40,10 @@ while uci -q set "wireless.@wifi-device[$radio_num].country=US"; do
     esac
 
     radio_num=$((radio_num + 1))
+done
+
+while uci -q delete "wireless.@wifi-iface[0]"; do
+    :
 done
 
 uci commit wireless
