@@ -23,6 +23,7 @@ import socket from 'umap.socket';
 import * as codec from 'umap.tlv.codec';
 import log from 'umap.log';
 import defs from 'umap.defs';
+import ubus from 'umap.ubusclient';
 
 import wireless from 'umap.wireless';
 
@@ -669,7 +670,7 @@ const I1905LocalBridge = proto({
 		return br;
 	},
 
-	init: function() {
+	init: function () {
 		if (!this.pending)
 			return true;
 
@@ -1379,7 +1380,8 @@ model = proto({
 		return [...wireless.radios];
 	},
 
-	updateSelf: function (ifstatus) {
+	updateSelf: function () {
+		let ifstatus = ubus.call('network.interface', 'dump')?.interface ?? [];
 		let i1905dev = this.addDevice(this.address);
 		let bridges = {};
 		let tlvs = [];
