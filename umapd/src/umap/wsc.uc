@@ -1,6 +1,6 @@
 import { pack, unpack, buffer } from 'struct';
 import { readfile } from 'fs';
-import log from 'log';
+import log from 'umap.log';
 import { sha256, hmac_sha256, aes_encrypt, aes_decrypt, dh_keypair, dh_sharedkey } from 'umap.crypto';
 
 import model from 'umap.model';
