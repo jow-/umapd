@@ -111,7 +111,7 @@ for (let bss in sort(settings, bss_cmp)) {
 		config: {
 			mode: mode,
 			ssid: bss.ssid,
-			network: network ?? 'lan',
+			network: [ network ?? 'lan' ],
 		}
 	};
 
