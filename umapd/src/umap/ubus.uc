@@ -85,13 +85,13 @@ const I1905UbusProcedures = {
 
 			if (mac != '00:00:00:00:00:00' && !length(metrics)) {
 				let reason = 0x07;
-				let reason_name = defs.REASON_CODES[reason];
+				let reason_name = defs.REASON_CODE[reason];
 
 				return req.reply({ metrics: null, reason, reason_name });
 			}
 			else {
 				let reason = 0x00;
-				let reason_name = defs.REASON_CODES[reason];
+				let reason_name = defs.REASON_CODE[reason];
 
 				return req.reply({ metrics, reason, reason_name });
 			}
