@@ -76,7 +76,7 @@ const I1905UbusProcedures = {
 							local_address: i1905lif.address,
 							is_bridge: i1905rif.isBridged(),
 							media_type: t,
-							media_type_name: defs.MEDIA_TYPES[t] ?? 'Unknown/Reserved',
+							media_type_name: defs.MEDIA_TYPE[t] ?? 'Unknown/Reserved',
 							metrics: i1905lif.getLinkMetrics(i1905rif.address)
 						});
 					}
@@ -85,13 +85,13 @@ const I1905UbusProcedures = {
 
 			if (mac != '00:00:00:00:00:00' && !length(metrics)) {
 				let reason = 0x07;
-				let reason_name = defs.REASON_CODES[reason];
+				let reason_name = defs.REASON_CODE[reason];
 
 				return req.reply({ metrics: null, reason, reason_name });
 			}
 			else {
 				let reason = 0x00;
-				let reason_name = defs.REASON_CODES[reason];
+				let reason_name = defs.REASON_CODE[reason];
 
 				return req.reply({ metrics, reason, reason_name });
 			}
