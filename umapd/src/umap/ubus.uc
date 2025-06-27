@@ -76,7 +76,7 @@ const I1905UbusProcedures = {
 							local_address: i1905lif.address,
 							is_bridge: i1905rif.isBridged(),
 							media_type: t,
-							media_type_name: defs.MEDIA_TYPES[t] ?? 'Unknown/Reserved',
+							media_type_name: defs.MEDIA_TYPE[t] ?? 'Unknown/Reserved',
 							metrics: i1905lif.getLinkMetrics(i1905rif.address)
 						});
 					}

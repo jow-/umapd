@@ -173,13 +173,13 @@ const TLVDecoder = [
 			if (off + 9 + values[1] > len)
 				return null;
 
-			if (!defs.MEDIA_TYPES[values[0]])
+			if (!defs.MEDIA_TYPE[values[0]])
 				return null;
 
 			push(res.ifaces, {
 				address: utils.ether_ntoa(payload, off),
 				media_type: values[0],
-				media_type_name: defs.MEDIA_TYPES[values[0]]
+				media_type_name: defs.MEDIA_TYPE[values[0]]
 			});
 
 			if (values[1])
@@ -315,7 +315,7 @@ const TLVDecoder = [
 			if (values[1] > 0x01)
 				return null;
 
-			if (!defs.MEDIA_TYPES[values[0]])
+			if (!defs.MEDIA_TYPE[values[0]])
 				return null;
 
 			push(res.links, {
@@ -323,7 +323,7 @@ const TLVDecoder = [
 				local_address: utils.ether_ntoa(payload, off),
 				remote_address: utils.ether_ntoa(payload, off + 6),
 				media_type: values[0],
-				media_type_name: defs.MEDIA_TYPES[values[0]],
+				media_type_name: defs.MEDIA_TYPE[values[0]],
 				is_bridge: (values[1] == 0x01),
 				errors: values[2],
 				packets: values[3],
@@ -352,7 +352,7 @@ const TLVDecoder = [
 		for (let off = 12; off < len; off += 23) {
 			let values = unpack('!HIIB', payload, off + 12);
 
-			if (!defs.MEDIA_TYPES[values[0]])
+			if (!defs.MEDIA_TYPE[values[0]])
 				return null;
 
 			push(res.links, {
@@ -360,7 +360,7 @@ const TLVDecoder = [
 				local_address: utils.ether_ntoa(payload, off),
 				remote_address: utils.ether_ntoa(payload, off + 6),
 				media_type: values[0],
-				media_type_name: defs.MEDIA_TYPES[values[0]],
+				media_type_name: defs.MEDIA_TYPE[values[0]],
 				errors: values[1],
 				packets: values[2],
 				rssi: values[3]
@@ -450,12 +450,12 @@ const TLVDecoder = [
 			if (off + 3 + values[1] > len)
 				return null;
 
-			if (!defs.MEDIA_TYPES[values[0]])
+			if (!defs.MEDIA_TYPE[values[0]])
 				return null;
 
 			push(res, {
 				media_type: values[0],
-				media_type_name: defs.MEDIA_TYPES[values[0]]
+				media_type_name: defs.MEDIA_TYPE[values[0]]
 			});
 
 			if (values[1])
@@ -688,13 +688,13 @@ const TLVDecoder = [
 
 			let values = unpack('!H3BB', payload, off + 6);
 
-			if (!defs.MEDIA_TYPES[values[0]])
+			if (!defs.MEDIA_TYPE[values[0]])
 				return null;
 
 			push(res, {
 				local_address: utils.ether_ntoa(payload, off),
 				media_type: values[0],
-				media_type_name: defs.MEDIA_TYPES[values[0]],
+				media_type_name: defs.MEDIA_TYPE[values[0]],
 				oui: sprintf('%02x:%02x:%02x', values[1], values[2], values[3]),
 				variant_index: values[4]
 			});
