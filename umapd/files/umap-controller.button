@@ -1,0 +1,18 @@
+#!/usr/bin/ucode
+
+import * as libubus from 'ubus';
+
+let ACTION=getenv('ACTION');
+if (ACTION != 'pressed')
+	exit(0);
+
+let ubus = libubus.connect();
+
+let wireless = ubus.call('network.wireless', 'status');
+
+for (let k, radio in wireless)
+	for (let interface in radio.interfaces)
+		if (interface.config.multi_ap in [ 2, 3 ] && interface.config.wps_pushbutton) {
+			ubus.call('hostapd.' + interface.ifname, 'wps_start');
+			exit(0);
+		}

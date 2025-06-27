@@ -65,9 +65,11 @@ define Package/umap-agent/description
 endef
 
 define Package/umap-agent/install
-	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/uci-defaults
+	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/uci-defaults $(1)/usr/libexec/umap/ $(1)/etc/rc.button/
 	$(INSTALL_BIN) ./files/umapd.agent.init $(1)/etc/init.d/umap-agent
 	$(INSTALL_DATA) ./files/umapd.agent.defaults $(1)/etc/uci-defaults/umap-agent
+	$(INSTALL_BIN) ./src/wps-connect.uc $(1)/usr/libexec/umap/wps-connect
+	$(INSTALL_BIN) ./files/umap-agent.button $(1)/etc/rc.button/umap-agent
 endef
 
 define Package/umap-controller
@@ -84,9 +86,10 @@ define Package/umap-controller/description
 endef
 
 define Package/umap-controller/install
-	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/uci-defaults
+	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/uci-defaults $(1)/etc/rc.button/
 	$(INSTALL_BIN) ./files/umapd.controller.init $(1)/etc/init.d/umap-controller
 	$(INSTALL_DATA) ./files/umapd.controller.defaults $(1)/etc/uci-defaults/umap-controller
+	$(INSTALL_BIN) ./files/umap-controller.button $(1)/etc/rc.button/umap-controller
 endef
 
 $(eval $(call BuildPackage,umapd))
