@@ -1244,11 +1244,32 @@ model = proto({
 				if (bridges[rtevent.msg.ifname]?.pending)
 					return bridges[rtevent.msg.ifname].init();
 
-				let brname = rtevent.msg.master;
+				let brname = null;
 				let brvlan = rtevent.msg.af_spec?.bridge?.bridge_vlan_info?.[0]?.vid;
 
-				if (brvlan != null)
-					brname += `.${brvlan}`;
+				/* determine related bridge vlan netdev name */
+				if (brvlan != null) {
+					/* attempt to find netdev name via ubus */
+					for (let name in bridges) {
+						let devstat = ubus.call('network.device', 'status', { name });
+
+						if (devstat?.devtype != 'vlan' || devstat?.vid != brvlan)
+							continue;
+
+						if (devstat?.parent != rtevent.msg.master)
+							continue;
+
+						brname = name;
+						break;
+					}
+
+					/* when no related bridge vlan netdev in ubus, guess name as last resort */
+					brname ??= `${rtevent.msg.master}.${brvlan}`;
+				}
+				/* ordinary bridge */
+				else {
+					brname = rtevent.msg.master;
+				}
 
 				/* ignore new link events for non-bridge port interfaces or bridges we do not manage */
 				if (!exists(bridges, brname))
