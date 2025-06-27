@@ -77,7 +77,7 @@ const ubus = ubus_connect();
 if (!ubus)
 	die(`Unable to connect to ubus: ${ubus_error()}`);
 
-let has_backhaul_sta = false;
+let has_backhaul_sta = null;
 
 const new_instances = { [radio]: {} };
 const cur_instances = ubus.call('service', 'get_data', {
@@ -94,6 +94,8 @@ for (let state_radio, state_bsses in cur_instances) {
 			if (bss.config?.mode == 'sta' && bss.config?.multi_ap == 1)
 				has_backhaul_sta = true;
 	}
+
+	has_backhaul_sta ??= false;
 }
 
 const counter = {};
@@ -102,7 +104,7 @@ for (let bss in sort(settings, bss_cmp)) {
 	if (bss.multi_ap?.tear_down)
 		break;
 
-	if (bss.multi_ap?.is_backhaul_sta && !has_backhaul_sta)
+	if (bss.multi_ap?.is_backhaul_sta && has_backhaul_sta === false)
 		continue;
 
 	const mode = bss.multi_ap?.is_backhaul_sta ? 'sta' : 'ap';
