@@ -1,0 +1,17 @@
+#!/usr/bin/ucode
+
+import * as libubus from 'ubus';
+
+if (getenv('ACTION') != 'pressed')
+	exit(0);
+
+let ubus = libubus.connect();
+let radios = {};
+
+for (let name, status in ubus.call('network.wireless', 'status') ?? {})
+    radios[status?.config?.band ?? '2g'] ??= name;
+
+return system([
+    '/usr/libexec/umap/wps-connect',
+    `--radio=${radios['5g'] ?? radios['2g'] ?? 'radio0'}`
+]);
