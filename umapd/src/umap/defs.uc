@@ -408,6 +408,7 @@ export default {
 	},
 
 	REASON_CODE: {
+		[0x00]: 'Success',
 		[0x01]: 'STA associated with a BSS operated by the Multi-AP Agent.',
 		[0x02]: 'STA not associated with any BSS operated by the Multi-AP Agent.',
 		[0x03]: 'Client capability report unspecified failure',
