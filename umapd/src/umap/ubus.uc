@@ -20,7 +20,7 @@ import model from 'umap.model';
 import utils from 'umap.utils';
 import ubus from 'umap.ubusclient';
 
-const I1905UbusProcedures = {
+const IUmapUbusProcedures = {
 	get_intf_list: {
 		args: {
 			ubus_rpc_session: "00000000000000000000000000000000"
@@ -167,7 +167,7 @@ export default {
 	call: (...args) => ubus.call(...args),
 
 	register: function (method, argspec, func) {
-		I1905UbusProcedures[method] = {
+		IUmapUbusProcedures[method] = {
 			args: {
 				...(argspec ?? {}),
 				ubus_rpc_session: '00000000000000000000000000000000'
@@ -178,7 +178,7 @@ export default {
 
 	publish: function () {
 		if (this.connect())
-			return (namespace ??= ubus.publish("ieee1905", I1905UbusProcedures));
+			return (namespace ??= ubus.publish("umap", IUmapUbusProcedures));
 	},
 
 	notify: function (...args) {

@@ -1,10 +1,14 @@
 {
-	"luci-app-u1905": {
-		"description": "Grant access to IEEE 1905 topology information",
+	"luci-app-umap": {
+		"description": "Grant access to EasyMesh (umap) topology information",
 		"read": {
 			"ubus": {
-				"ieee1905": [ "get_topology" ],
-				"luci-rpc": [ "getHostHints" ]
+				"umap": [
+					"get_topology"
+				],
+				"luci-rpc": [
+					"getHostHints"
+				]
 			}
 		}
 	}

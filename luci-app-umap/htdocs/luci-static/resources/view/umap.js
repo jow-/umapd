@@ -5,21 +5,21 @@
 'require ui';
 
 function loadVisNetworkJS() {
-	return new Promise(function(resolveFn, rejectFn) {
+	return new Promise(function (resolveFn, rejectFn) {
 		var s = document.querySelector('head').appendChild(E('script', {
 			type: 'text/javascript',
 			load: resolveFn,
 			error: rejectFn
 		}));
 
-		s.src = L.resource('u1905/vis-network.min.js');
+		s.src = L.resource('umap/vis-network.min.js');
 	});
 }
 
-var callIeee1905GetTopology = rpc.declare({
-	object: 'ieee1905',
+var callUmapGetTopology = rpc.declare({
+	object: 'umap',
 	method: 'get_topology',
-	expect: { }
+	expect: {}
 });
 
 var EDGE_LENGTH_MAIN = 200;
@@ -41,14 +41,14 @@ function edgeLabel(metric) {
 }
 
 return view.extend({
-	load: function() {
+	load: function () {
 		return Promise.all([
-			callIeee1905GetTopology(),
+			callUmapGetTopology(),
 			loadVisNetworkJS()
 		]);
 	},
 
-	render: function(data) {
+	render: function (data) {
 		var topo = data[0] || { devices: [], links: [] };
 		var container = E('div', { style: 'height:80vh' });
 		var edges = [];
@@ -62,7 +62,7 @@ return view.extend({
 			nodes.push({
 				id: device.al_address,
 				label: (device.identification?.friendly_name ?? device.al_address),
-				image: L.resource('u1905/img/Network-Pipe-icon.png'),
+				image: L.resource('umap/img/Network-Pipe-icon.png'),
 				shape: "image",
 				opacity: 1.0,
 				title: '<strong>Foo</strong><br>\nLala'
@@ -104,7 +104,7 @@ return view.extend({
 					nodes.push({
 						id: device.neighbors.others[k][l],
 						label: device.neighbors.others[k][l],
-						image: L.resource('u1905/img/Hardware-My-Computer-3-icon.png'),
+						image: L.resource('umap/img/Hardware-My-Computer-3-icon.png'),
 						shape: "image",
 						group: "computer",
 						opacity: 1,
@@ -150,7 +150,7 @@ return view.extend({
 		});
 
 		return E([
-			E('h2', {}, _('IEEE 1905 Topology')),
+			E('h2', {}, _('EasyMesh IEEE.1905 Topology')),
 			container
 		]);
 	},

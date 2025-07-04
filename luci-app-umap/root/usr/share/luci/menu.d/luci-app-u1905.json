@@ -1,13 +1,15 @@
 {
-	"admin/status/u1905": {
-		"title": "IEEE 1905",
+	"admin/status/umap": {
+		"title": "EasyMesh",
 		"order": 90,
 		"action": {
 			"type": "view",
-			"path": "u1905"
+			"path": "umap"
 		},
 		"depends": {
-			"acl": [ "luci-app-u1905" ]
+			"acl": [
+				"luci-app-umap"
+			]
 		}
 	}
 }

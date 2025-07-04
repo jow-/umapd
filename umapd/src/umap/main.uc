@@ -235,7 +235,7 @@ export default function () {
     proto_scanning.init();
 
     if (!('no-ubus' in opts) && !ubus.publish())
-        log.warn(`Unable to publish ieee1905 object: ${ubus.error()}`);
+        log.warn(`Unable to publish umap object: ${ubus.error()}`);
 
     if (length(model.interfaces) > 0)
         proto_topology.start();
