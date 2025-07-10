@@ -15,9 +15,8 @@ start_service() {
 
 	for interface in ${interfaces:-lan}; do
 		local device
-		network_get_device device "$interface" && \
-			[ -e "/sys/class/net/$device" ] && \
-			devices="${devices:+$devices }$device"
+		network_get_device device "$interface" || network_get_physdev device "$interface"
+		[ -n "$device" ] && devices="${devices:+$devices }$device"
 	done
 
 	[ -n "$devices" ] || {
