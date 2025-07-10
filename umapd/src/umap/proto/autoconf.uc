@@ -47,18 +47,22 @@ const IAgentSession = {
 
 	debug: function (msg) {
 		log.debug(`autoconf: radio ${this.radio.address}: ${msg}`);
+		return true;
 	},
 
 	info: function (msg) {
 		log.info(`autoconf: radio ${this.radio.address}: ${msg}`);
+		return true;
 	},
 
 	warn: function (msg) {
 		log.warn(`autoconf: radio ${this.radio.address}: ${msg}`);
+		return true;
 	},
 
 	error: function (msg) {
 		log.error(`autoconf: radio ${this.radio.address}: ${msg}`);
+		return true;
 	},
 
 	transitionState: function (new_state) {
@@ -208,7 +212,7 @@ const IAgentSession = {
 		if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_RESPONSE) {
 			// Ignore autoconf responses not belonging to our pending requests
 			if (!(msg.mid in this.midsInFlight))
-				return false;
+				return this.debug(`unexpected AP Auto-Configuration reponse`);
 
 			this.debug(`received AP Auto-Configuration response`);
 

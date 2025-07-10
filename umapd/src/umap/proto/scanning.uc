@@ -492,16 +492,20 @@ const IProtoScanning = {
 	handle_cmdu: function (i1905lif, dstmac, srcmac, msg) {
 		// disregard CMDUs not directed to our AL
 		if (dstmac != model.address)
-			return false;
+			return true;
 
 		if (msg.type === defs.MSG_CHANNEL_SCAN_REQUEST) {
 			const req = msg.get_tlv(defs.TLV_CHANNEL_SCAN_REQUEST);
 
-			if (!req)
-				return log.warn(`scanning: ignoring request message without scan request TLV`);
+			if (!req) {
+				log.warn(`scanning: ignoring request message without scan request TLV`);
+				return true;
+			}
 
-			if (!length(req.radios))
-				return log.warn(`scanning: ignoring request message without radios in request TLV`);
+			if (!length(req.radios)) {
+				log.warn(`scanning: ignoring request message without radios in request TLV`);
+				return true;
+			}
 
 			const ack = cmdu.create(defs.MSG_IEEE1905_ACK, msg.mid);
 			ack.send(i1905lif.i1905sock, model.address, srcmac);

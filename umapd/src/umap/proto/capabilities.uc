@@ -123,7 +123,7 @@ const IProtoCapabilities = {
 	handle_cmdu: function (i1905lif, dstmac, srcmac, msg) {
 		// disregard CMDUs not directed to our AL
 		if (dstmac != model.address)
-			return false;
+			return true;
 
 		if (msg.type === defs.MSG_AP_CAPABILITY_QUERY) {
 			const reply = cmdu.create(defs.MSG_AP_CAPABILITY_REPORT, msg.mid);
@@ -170,7 +170,7 @@ const IProtoCapabilities = {
 		}
 		else if (msg.type === defs.MSG_AP_CAPABILITY_REPORT) {
 			if (!model.isController)
-				return false;
+				return true;
 
 			let i1905dev = model.lookupDevice(srcmac);
 
@@ -202,7 +202,7 @@ const IProtoCapabilities = {
 		}
 		else if (msg.type === defs.MSG_BACKHAUL_STA_CAPABILITY_REPORT) {
 			if (!model.isController)
-				return false;
+				return true;
 
 			let i1905dev = model.lookupDevice(srcmac);
 

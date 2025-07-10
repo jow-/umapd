@@ -170,7 +170,7 @@ const IProtoTopology = {
 
 			if (!al_mac || !if_mac) {
 				log.warn(`Ignoring incomplete topology discovery CMDU`);
-				return;
+				return true;
 			}
 
 			let dev = model.lookupDevice(al_mac);
@@ -203,10 +203,12 @@ const IProtoTopology = {
 		}
 		else if (msg.type == defs.MSG_TOPOLOGY_NOTIFICATION) {
 			if (!model.isController)
-				return false;
+				return true;
 
-			if (!al_mac)
-				return log.warn(`topology: ignoring notification without AL MAC`);
+			if (!al_mac) {
+				log.warn(`topology: ignoring notification without AL MAC`);
+				return true;
+			}
 
 			const query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
 
@@ -217,7 +219,7 @@ const IProtoTopology = {
 		else if (msg.type == defs.MSG_TOPOLOGY_QUERY) {
 			// Ignore queries destined to other nodes
 			if (dstmac != model.address)
-				return false;
+				return true;
 
 			let reply = cmdu.create(defs.MSG_TOPOLOGY_RESPONSE, msg.mid);
 
@@ -238,13 +240,13 @@ const IProtoTopology = {
 		else if (msg.type == defs.MSG_LINK_METRIC_QUERY) {
 			// Ignore queries destined to other nodes
 			if (dstmac != model.address)
-				return false;
+				return true;
 
 			let requested_metrics = msg.get_tlv(defs.TLV_LINK_METRIC_QUERY);
 
 			if (!requested_metrics) {
 				log.warn(`Ignoring incomplete link metric query CMDU`);
-				return false;
+				return true;
 			}
 
 			let reply = cmdu.create(defs.MSG_LINK_METRIC_RESPONSE, msg.mid);
@@ -263,13 +265,13 @@ const IProtoTopology = {
 		}
 		else if (msg.type == defs.MSG_TOPOLOGY_RESPONSE) {
 			if (!model.isController)
-				return false;
+				return true;
 
 			let devinfo = msg.get_tlv(defs.TLV_IEEE1905_DEVICE_INFORMATION);
 
 			if (!devinfo) {
 				log.warn(`Ignoring malformed topology response CMDU`);
-				return false;
+				return true;
 			}
 
 			let i1905dev = model.addDevice(devinfo.al_mac_address);
@@ -298,7 +300,7 @@ const IProtoTopology = {
 
 				if (!transmitter_al_mac_address) {
 					log.warn(`Ignoring malformed metrics reply CMDU`);
-					return false;
+					return true;
 				}
 
 				push((tlvs_by_al_address ??= {})[transmitter_al_mac_address] ??= [], tlv);
@@ -316,7 +318,7 @@ const IProtoTopology = {
 		else if (msg.type == defs.MSG_HIGHER_LAYER_QUERY) {
 			// Ignore queries destined to other nodes
 			if (dstmac != model.address)
-				return false;
+				return true;
 
 			let reply = cmdu.create(defs.MSG_HIGHER_LAYER_RESPONSE, msg.mid);
 
@@ -341,8 +343,8 @@ const IProtoTopology = {
 			let i1905dev = model.lookupDevice(srcmac);
 
 			if (!i1905dev) {
-				log.warn('Ignoring infrastructure metrics from unknown device %s', srcmac);
-				return false;
+				log.debug('Ignoring infrastructure metrics from unknown device %s', srcmac);
+				return true;
 			}
 
 			i1905dev.updateTLVs(msg.get_tlvs_raw());
