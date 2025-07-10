@@ -312,16 +312,40 @@ const I1905RemoteInterface = proto({
 }, I1905Entity);
 
 const I1905LocalInterface = proto({
-	new: function (link, i1905sock, lldpsock) {
-		log.info(`Using local interface ${link.ifname} (${link.address}${link.vlan ? `, VLAN ${link.vlan}` : ''})`);
-
-		return proto({
-			address: link.address,
-			ifname: link.ifname,
-			i1905sock,
-			lldpsock,
+	new: function (ifname, vlan) {
+		const ifc = proto({
+			ifname,
+			vlan,
+			pending: true,
 			neighbors: []
 		}, this);
+
+		ifc.init();
+
+		return ifc;
+	},
+
+	init: function () {
+		if (!this.pending)
+			return true;
+
+		const link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: this.ifname });
+
+		if (!link)
+			return log.info(`Interface ${this.ifname} not present on the system, deferring setup`);
+
+		log.info(`Listening on interface ${link.ifname} (${link.address}${this.vlan ? `, VLAN ${this.vlan}` : ''})`);
+
+		if (!(this.i1905sock = socket.create(link.ifname, socket.const.ETH_P_1905, this.vlan)))
+			die(`Unable to spawn IEEE 1905 TX socket on ${link.ifname}: ${socket.error()}`);
+
+		if (!(this.lldpsock = socket.create(link.ifname, socket.const.ETH_P_LLDP, this.vlan)))
+			die(`Unable to spawn LLDP TX socket on ${link.ifname}: ${socket.error()}`);
+
+		this.address = link.address;
+		this.pending = false;
+
+		return true;
 	},
 
 	addNeighbor: function (i1905if) {
@@ -564,16 +588,13 @@ const I1905LocalInterface = proto({
 		if (!refresh && this.info)
 			return this.info;
 
-		let ifname = this.i1905sock.ifname,
+		let ifname = this.i1905sock?.ifname ?? this.ifname,
 			link = rtrequest(rtconst.RTM_GETLINK, 0, { dev: ifname }),
 			wifi = wlrequest(wlconst.NL80211_CMD_GET_INTERFACE, 0, { dev: ifname }),
 			wphy = wlrequest(wlconst.NL80211_CMD_GET_WIPHY, 0, { dev: ifname }),
 			wsta = wlrequest(wlconst.NL80211_CMD_GET_STATION, wlconst.NLM_F_DUMP, { dev: ifname });
 
-		if (!link)
-			return null;
-
-		return (this.info = {
+		return (this.info = link ? {
 			ifname,
 			address: link.address,
 			statistics: link.stats64,
@@ -585,7 +606,7 @@ const I1905LocalInterface = proto({
 				interface: wifi,
 				stations: wsta ?? []
 			} : null
-		});
+		} : { ifname });
 	},
 
 	getLinkMetrics: function (remote_address) {
@@ -716,15 +737,7 @@ const I1905LocalBridge = proto({
 		if (exists(this.ports, link.ifname))
 			return this.ports[link.ifname];
 
-		let i1905sock, lldpsock;
-
-		if (!(i1905sock = socket.create(link.ifname, socket.const.ETH_P_1905, tagged ? this.vlan : null)))
-			die(`Unable to spawn IEEE 1905 TX socket on ${link.ifname}: ${socket.error()}`);
-
-		if (!(lldpsock = socket.create(link.ifname, socket.const.ETH_P_LLDP, tagged ? this.vlan : null)))
-			die(`Unable to spawn LLDP TX socket on ${link.ifname}: ${socket.error()}`);
-
-		const i1905lif = (this.ports[link.ifname] = I1905LocalInterface.new(link, i1905sock, lldpsock));
+		const i1905lif = (this.ports[link.ifname] = I1905LocalInterface.new(link.ifname, tagged ? this.vlan : null));
 
 		if (model.address != '00:00:00:00:00:00')
 			this.updatePortFilter(i1905lif.ifname, true);
@@ -1238,11 +1251,23 @@ model = proto({
 		const ubus = this.ubus;
 
 		rtlistener(function (rtevent) {
+			const ifname = rtevent.msg.ifname;
+
 			//try {
 			if (rtevent.cmd == rtconst.RTM_NEWLINK) {
+				/* pending interface came online */
+				if (interfaces[ifname]?.pending) {
+					interfaces[ifname].init();
+					return port_change_cb(interfaces[ifname], true);
+				}
+
 				/* pending bridge came online */
-				if (bridges[rtevent.msg.ifname]?.pending)
-					return bridges[rtevent.msg.ifname].init();
+				if (bridges[ifname]?.pending)
+					return bridges[ifname].init();
+
+				/* ignore new link events for interfaces we already know */
+				if (exists(interfaces, ifname))
+					return;
 
 				let brname = null;
 				let brvlan = rtevent.msg.af_spec?.bridge?.bridge_vlan_info?.[0]?.vid;
@@ -1275,20 +1300,16 @@ model = proto({
 				if (!exists(bridges, brname))
 					return;
 
-				/* ignore new link events for interfaces we already know */
-				if (exists(interfaces, rtevent.msg.ifname))
-					return;
-
 				/* ignore non-backhaul BSSes */
-				if (access(`/sys/class/net/${rtevent.msg.ifname}/phy80211/index`))
+				if (access(`/sys/class/net/${ifname}/phy80211/index`))
 					for (let radioname, radiostate in ubus.call('network.wireless', 'status'))
 						for (let wif in radiostate.interfaces)
-							if (wif.ifname == rtevent.msg.ifname && !(wif.config.multi_ap & 1))
+							if (wif.ifname == ifname && !(wif.config.multi_ap & 1))
 								return;
 
-				log.info(`Adding port ${rtevent.msg.ifname} to bridge ${brname}`);
-				interfaces[rtevent.msg.ifname] = bridges[brname].addPort(rtevent.msg, false);
-				port_change_cb(interfaces[rtevent.msg.ifname], true);
+				log.info(`Adding port ${ifname} to bridge ${brname}`);
+				interfaces[ifname] = bridges[brname].addPort(rtevent.msg, false);
+				port_change_cb(interfaces[ifname], true);
 			}
 			else {
 				/* ignore delete link events not removing the entire interface */
@@ -1296,16 +1317,25 @@ model = proto({
 					return;
 
 				/* ignore delete link events for interfaces unknown to us */
-				if (!exists(interfaces, rtevent.msg.ifname))
+				if (!exists(interfaces, ifname))
 					return;
 
 				for (let brname, bridge in bridges) {
-					if (bridge.deletePort(rtevent.msg.ifname)) {
-						log.info(`Removing port ${rtevent.msg.ifname} from bridge ${brname}`);
-						port_change_cb(interfaces[rtevent.msg.ifname], false);
-						delete interfaces[rtevent.msg.ifname];
-						break;
+					if (bridge.deletePort(ifname)) {
+						log.info(`Removing port ${ifname} from bridge ${brname}`);
+						port_change_cb(interfaces[ifname], false);
+						delete interfaces[ifname];
 					}
+				}
+
+				if (interfaces[ifname]) {
+					log.info(`Interface ${ifname} is gone`);
+					port_change_cb(interfaces[ifname], false);
+
+					delete interfaces[ifname].i1905sock;
+					delete interfaces[ifname].lldpsock;
+
+					interfaces[ifname].pending = true;
 				}
 			}
 			//} catch (e) {
@@ -1315,30 +1345,22 @@ model = proto({
 	},
 
 	addLocalInterface: function (ifname) {
-		let rv;
-
-		for (let link in resolve_bridge_ports(ifname)) {
-			let i1905sock = socket.create(link.ifname, socket.const.ETH_P_1905, link.vlan);
-			let lldpsock = socket.create(link.ifname, socket.const.ETH_P_LLDP, link.vlan);
-
-			if (!i1905sock || !lldpsock)
-				return null;
-
-			rv = (this.interfaces[link.ifname] ??= I1905LocalInterface.new(link, i1905sock, lldpsock));
-		}
-
-		return rv;
+		return (this.interfaces[ifname] ??= I1905LocalInterface.new(ifname));
 	},
 
 	lookupLocalInterface: function (value) {
-		for (let k, ifc in this.interfaces)
+		for (let k, ifc in this.interfaces) {
+			if (ifc.pending)
+				continue;
+
 			if (ifc.ifname == value || ifc.address == value ||
 				ifc.i1905sock == value || ifc.lldpsock == value)
 				return ifc;
+		}
 	},
 
 	getLocalInterfaces: function () {
-		return values(this.interfaces);
+		return filter(values(this.interfaces), ifc => !ifc.pending);
 	},
 
 	addLocalBridge: function (brname) {
@@ -1516,7 +1538,7 @@ model = proto({
 			}
 		}
 
-		let i1905lifs = values(this.interfaces);
+		let i1905lifs = this.getLocalInterfaces();
 
 		push(tlvs,
 			this.encode_ipv4_tlv(i1905lifs, ifstatus),
