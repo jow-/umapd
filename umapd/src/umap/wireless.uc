@@ -19,6 +19,7 @@ import { popen, readfile } from 'fs';
 import { unpack, buffer } from 'struct';
 import { cursor } from 'uci';
 
+import events from 'umap.events';
 import ubus from 'umap.ubusclient';
 import log from 'umap.log';
 
@@ -613,8 +614,27 @@ const IRadio = {
 	}
 };
 
-export default {
+const IWireless = {
 	radios: [],
+
+	observeAssociationEvents: function () {
+		const self = this;
+
+		this.hostapdSubscriber = ubus.subscriber(msg => {
+			if (msg.type == 'assoc' || msg.type == 'disassoc') {
+				const radio = self.lookupRadioByIfname(msg.data.ifname);
+
+				if (radio) {
+					events.dispatch('wireless.association', {
+						radio,
+						ap_address: readfile(`/sys/class/net/${msg.data.ifname}/address`, 17),
+						sta_address: msg.data.address,
+						associated: (msg.type == 'assoc'),
+					});
+				}
+			}
+		}, null, ['hostapd.*']);
+	},
 
 	addRadio: function (phyname) {
 		let existing = filter(this.radios, radio => radio.phyname == phyname)[0];
@@ -743,3 +763,7 @@ export default {
 
 	channelToFrequency: channelToFrequency,
 };
+
+IWireless.observeAssociationEvents();
+
+export default IWireless;
