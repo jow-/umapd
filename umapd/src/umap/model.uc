@@ -907,6 +907,10 @@ I1905Device = proto({
 		return false;
 	},
 
+	isFirstDevice: function () {
+		return this === model.devices[1];
+	},
+
 	getInterfaceInformation: function () {
 		let d = this.tlvs[defs.TLV_DEVICE_INFORMATION]?.[1];
 		let interfaces = {};
