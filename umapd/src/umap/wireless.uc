@@ -656,7 +656,7 @@ export default {
 
 		let radio = proto({
 			phyname,
-			index: idx,
+			index: +idx,
 			info: phy,
 			address: readfile(`/sys/class/ieee80211/${phyname}/macaddress`, 17)
 		}, IRadio);
