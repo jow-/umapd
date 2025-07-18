@@ -23,7 +23,7 @@ import utils from 'umap.utils';
 
 import proto_autoconf from 'umap.proto.autoconf';
 
-import { timer } from 'uloop';
+import { timer, interval } from 'uloop';
 
 
 const TOPOLOGY_DISCOVERY_DELAY = 500;
@@ -35,18 +35,6 @@ const TOPOLOGY_NODEUPDATE_INTERVAL = 30000;
 const TOPOLOGY_CLEANUP_INTERVAL = 5000;
 
 let started = false;
-
-function update_self() {
-	this.set(TOPOLOGY_SELFUPDATE_INTERVAL);
-
-	model.updateSelf();
-}
-
-function cleanup_model() {
-	this.set(TOPOLOGY_CLEANUP_INTERVAL);
-
-	model.collectGarbage();
-}
 
 function emit_topology_discovery() {
 	this.set(TOPOLOGY_DISCOVERY_INTERVAL);
@@ -62,13 +50,10 @@ function emit_topology_discovery() {
 		msg.add_tlv(defs.TLV_MAC_ADDRESS, i1905lif.address);
 
 		msg.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC);
-
 	}
 }
 
 function emit_topology_notification() {
-	this.set(TOPOLOGY_SENDNOTIFY_INTERVAL);
-
 	if (!model.topologyChanged)
 		return;
 
@@ -83,8 +68,6 @@ function emit_topology_notification() {
 }
 
 function update_node_information() {
-	this.set(TOPOLOGY_NODEUPDATE_INTERVAL);
-
 	const i1905lifs = model.getLocalInterfaces();
 
 	for (let i1905dev in model.getDevices()) {
@@ -153,11 +136,14 @@ const IProtoTopology = {
 		if (started)
 			return;
 
-		timer(TOPOLOGY_SELFUPDATE_INTERVAL, update_self);
-		timer(TOPOLOGY_DISCOVERY_DELAY, emit_topology_discovery);
-		timer(TOPOLOGY_SENDNOTIFY_INTERVAL, emit_topology_notification);
-		timer(TOPOLOGY_NODEUPDATE_INTERVAL, update_node_information);
-		timer(TOPOLOGY_CLEANUP_INTERVAL, cleanup_model);
+		timer(TOPOLOGY_DISCOVERY_DELAY,
+			() => interval(TOPOLOGY_DISCOVERY_INTERVAL, emit_topology_discovery));
+
+		interval(TOPOLOGY_SELFUPDATE_INTERVAL, () => model.updateSelf());
+		interval(TOPOLOGY_CLEANUP_INTERVAL, () => model.collectGarbage());
+
+		interval(TOPOLOGY_SENDNOTIFY_INTERVAL, emit_topology_notification);
+		interval(TOPOLOGY_NODEUPDATE_INTERVAL, update_node_information);
 
 		started = true;
 	},
