@@ -20,6 +20,7 @@ import cmdu from 'umap.cmdu';
 import lldp from 'umap.lldp';
 import defs from 'umap.defs';
 import utils from 'umap.utils';
+import events from 'umap.events';
 
 import proto_autoconf from 'umap.proto.autoconf';
 
@@ -53,13 +54,21 @@ function emit_topology_discovery() {
 	}
 }
 
-function emit_topology_notification() {
-	if (!model.topologyChanged)
+function emit_topology_notification(assoc_event) {
+	if (!model.topologyChanged && !assoc_event)
 		return;
 
 	let reply = cmdu.create(defs.MSG_TOPOLOGY_NOTIFICATION);
 
 	reply.add_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS, model.address);
+
+	if (assoc_event) {
+		reply.add_tlv(defs.TLV_CLIENT_ASSOCIATION_EVENT, {
+			bssid: assoc_event.ap_address,
+			mac_address: assoc_event.sta_address,
+			association_event: assoc_event.associated ? true : false,
+		});
+	}
 
 	for (let i1905lif in model.getLocalInterfaces())
 		reply.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
@@ -130,6 +139,7 @@ function send_information_queries(i1905lif, al_mac) {
 const IProtoTopology = {
 	init: function () {
 		model.updateSelf();
+		events.register('wireless.association', emit_topology_notification);
 	},
 
 	start: function () {
