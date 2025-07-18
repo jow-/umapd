@@ -34,6 +34,11 @@ export default {
             return ubusconn.call(object, method, args);
     },
 
+    subscriber: function (notify_cb, remove_cb, subscriptions) {
+        if (this.connect())
+            return ubusconn.subscriber(notify_cb, remove_cb, subscriptions);
+    },
+
     publish: function (namespace, procedures) {
         if (this.connect())
             return ubusconn.publish(namespace, procedures);
