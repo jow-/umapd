@@ -194,7 +194,7 @@ export default function () {
 
     for (let ifname in opts.interface) {
         let ifc = model.addLocalInterface(ifname);
-        if (ifc) {
+        if (ifc?.pending != true) {
             uloop.handle(ifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
             uloop.handle(ifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
         }
