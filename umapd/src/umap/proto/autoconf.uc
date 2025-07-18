@@ -491,10 +491,16 @@ const IProtoAutoConf = {
 			 * Synthesize the STA configuration by mirroring the (first)
 			 * backhaul BSS configuration and simply flipping the type. */
 			if (sender.getBackhaulSTACapability(radioCapabilities.radio_unique_identifier)) {
-				for (let bss in desiredBSSes) {
-					if (bss.type == 'backhaul') {
-						unshift(desiredBSSes, { ...bss, type: 'station' });
-						break;
+				/* When this is the first device we're onboarding, don't include
+				 * backhaul station credentials as it will cause the agent to
+				 * spawn a station having nothing to connect to, inhibiting the
+				 * launch of AP BSSes on the same radio. */
+				if (!sender.isFirstDevice()) {
+					for (let bss in desiredBSSes) {
+						if (bss.type == 'backhaul') {
+							unshift(desiredBSSes, { ...bss, type: 'station' });
+							break;
+						}
 					}
 				}
 			}
