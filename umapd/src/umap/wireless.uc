@@ -683,7 +683,7 @@ const IWireless = {
 
 		/* lookup corresponding uci wifi-device section for phy */
 		cursor().foreach('wireless', 'wifi-device', wifi => {
-			let wifi_phyname = trim(popen(`/usr/bin/iwinfo nl80211 phy '${wifi['.name']}'`, 'r').read('line'));
+			let wifi_phyname = trim(popen(`/usr/bin/iwinfo nl80211 phyname '${wifi['.name']}'`, 'r').read('line'));
 			if (wifi_phyname == phyname) {
 				const rf_band = uci_band_to_rf_band(wifi.band);
 				radio.config = wifi['.name'];
