@@ -24,6 +24,7 @@ import {
 
 import { request as rtrequest, 'const' as rtconst } from 'rtnl';
 import { pack } from 'struct';
+import * as udebug from 'udebug';
 
 import utils from 'umap.utils';
 import defs from 'umap.defs';
@@ -188,9 +189,55 @@ export default {
 			address, ifname, bridge,
 			socket: sock,
 			protocol: pack('!H', ethproto),
+			vlan_id: vlan,
 			vlan: vlan ? pack('!HH', this.const.ETH_P_8021Q, vlan) : null,
 			ports: {}
 		}, this);
+	},
+
+	debug_config: function(config) {
+		let size = config?.packet_size;
+		if (!size)
+			size = 131072;
+
+		let entries = config?.packet_entries;
+		if (!entries)
+			entries = 512;
+
+		let size_changed = this.debug_size != size || this.debug_entries != entries;
+		for (let mode in [ "tx", "rx" ]) {
+			let enabled = +config.enabled && +config["packet_" + mode];
+			let field = "debug_" + mode;
+
+			if (size_changed && this[field]) {
+				this[field].close();
+				delete this[field];
+			}
+
+			if (!!enabled == !!this[field])
+				continue;
+
+			if (enabled) {
+				let name = config.prefix + " " + this.ifname;
+				if (this.vlan_id)
+					name += "." + vlan_id;
+				name += " " + mode;
+				if (this.ethproto == this.const.ETH_P_LLDP)
+					name += " lldp";
+				else if (this.ethproto == this.const.ETH_P_1905)
+					name += " 1905";
+				else if (this.ethproto > 0)
+					name += sprintf("0x%04x", this.ethproto);
+
+				let format = udebug.DLT_ETHERNET;
+				this[field] = udebug.create_ring({
+					name, size, entries, format
+				});
+			} else {
+				this[field].close();
+				delete this[field];
+			}
+		}
 	},
 
 	send: function (src, dest, data) {
@@ -202,6 +249,9 @@ export default {
 			frame = [dmac, smac, this.vlan, this.protocol, data];
 		else
 			frame = [dmac, smac, this.protocol, data];
+
+		if (this.debug_tx)
+			this.debug_tx.add(frame);
 
 		return this.socket.sendmsg(frame, null, {
 			family: AF_PACKET,
@@ -216,6 +266,9 @@ export default {
 		if (!msg)
 			return failure(sockerr());
 
+		if (this.debug_rx)
+			this.debug_rx.add(msg.data);
+
 		return [
 			utils.ether_ntoa(msg.data[0]),
 			utils.ether_ntoa(msg.data[1]),
@@ -225,6 +278,12 @@ export default {
 	},
 
 	close: function () {
+		if (this.debug_tx)
+			this.debug_tx.close();
+
+		if (this.debug_rx)
+			this.debug_rx.close();
+
 		return this.socket.close();
 	},
 

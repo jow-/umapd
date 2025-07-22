@@ -23,7 +23,7 @@ define Package/umapd
   DEPENDS:=+libopenssl +ucode \
 	+ucode-mod-fs +ucode-mod-nl80211 +ucode-mod-rtnl +ucode-mod-socket \
 	+ucode-mod-struct +ucode-mod-ubus +ucode-mod-uci +ucode-mod-uloop \
-	+kmod-veth
+	+ucode-mod-udebug +kmod-veth
 endef
 
 define Package/umapd/description

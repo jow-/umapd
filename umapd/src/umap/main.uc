@@ -17,6 +17,7 @@
 'use strict';
 
 import * as uloop from 'uloop';
+import * as udebug from 'udebug';
 
 import * as sys from 'umap.core';
 import socket from 'umap.socket';
@@ -132,6 +133,27 @@ function handle_lldp_input(flags) {
 	}
 }
 
+function handle_udebug_config(config)
+{
+    config = config?.service?.umapd;
+    config ??= {};
+
+    config.prefix = model.udebug_prefix;
+    model.udebug_config = config;
+    log.debug_config(config);
+    for (let ifc in model.getLocalInterfaces()) {
+        ifc.i1905sock.debug_config(config);
+        ifc.lldpsock.debug_config(config);
+    }
+
+    for (let brname, br in model.bridges) {
+        for (let ifname, portifc in br?.ports) {
+            portifc.i1905sock.debug_config(config);
+            portifc.lldpsock.debug_config(config);
+        }
+    }
+}
+
 export default function () {
 	uloop.init();
 
@@ -223,12 +245,18 @@ export default function () {
 	model.initializeAddress();
 	model.observeDeviceChanges(function (portifc, added) {
 		if (added && portifc.ieee1905) {
+			portifc.i1905sock.debug_config(model.udebug_config);
+			portifc.lldpsock.debug_config(model.udebug_config);
 			uloop.handle(portifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
 			uloop.handle(portifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
 
 			proto_topology.start();
 		}
 	});
+
+	udebug.init();
+	model.udebug_prefix = opts.controller ? "umap-controller" : "umap-agent";
+	ubus.register_udebug(handle_udebug_config);
 
 	proto_topology.init();
 	proto_autoconf.init();
