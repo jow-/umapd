@@ -22,7 +22,8 @@ define Package/umapd
   MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
   DEPENDS:=+libopenssl +ucode \
 	+ucode-mod-fs +ucode-mod-nl80211 +ucode-mod-rtnl +ucode-mod-socket \
-	+ucode-mod-struct +ucode-mod-ubus +ucode-mod-uci +ucode-mod-uloop
+	+ucode-mod-struct +ucode-mod-ubus +ucode-mod-uci +ucode-mod-uloop \
+	+kmod-veth
 endef
 
 define Package/umapd/description
