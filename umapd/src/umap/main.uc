@@ -87,54 +87,37 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 	}
 }
 
-function handle_i1905_input(flags) {
-	let sock = this.handle();
+function handle_i1905_input(payload) {
+	let sock = this;
 
-	while (true) {
-		let payload = sock.recv();
-
-		if (!payload)
-			break;
-
-		let i1905lif = model.lookupLocalInterface(sock);
-
-		if (!i1905lif) {
-			log.warn(`Received CMDU on unknown interface (${sock.ifname})`);
-			continue;
-		}
-
-		let msg = cmdu.parse(payload[1], payload[3]);
-
-		if (!msg)
-			log.debug('RX %-8s: %s > %s : Invalid CMDU', sock.ifname, payload[1], payload[0]);
-		else if (msg.is_complete())
-			handle_i1905_cmdu(i1905lif, payload[0], payload[1], msg);
+	let i1905lif = model.lookupLocalInterface(sock);
+	if (!i1905lif) {
+		log.warn(`Received CMDU on unknown interface (${sock.ifname})`);
+		return;
 	}
+
+	let msg = cmdu.parse(payload[1], payload[3]);
+
+	if (!msg)
+		log.debug('RX %-8s: %s > %s : Invalid CMDU', sock.ifname, payload[1], payload[0]);
+	else if (msg.is_complete())
+		handle_i1905_cmdu(i1905lif, payload[0], payload[1], msg);
 }
 
-function handle_lldp_input(flags) {
-	let sock = this.handle();
+function handle_lldp_input(payload) {
+	let msg = lldp.parse(payload[3]);
 
-	while (true) {
-		let payload = sock.recv();
-
-		if (!payload)
-			break;
-
-		let msg = lldp.parse(payload[3]);
-
-		if (!msg) {
-			log.warn(`Ignoring incomplete/malformed LLDPU`);
-			continue;
-		}
-
-		if (msg.chassis == model.address) {
-			log.warn(`Ignoring LLDPU originating from our AL MAC (network loop?)`);
-			continue;
-		}
-
-		model.addDevice(msg.chassis).addInterface(msg.port).updateLLDPTimestamp();
+	if (!msg) {
+		log.warn(`Ignoring incomplete/malformed LLDPU`);
+		return;
 	}
+
+	if (msg.chassis == model.address) {
+		log.warn(`Ignoring LLDPU originating from our AL MAC (network loop?)`);
+		return;
+	}
+
+	model.addDevice(msg.chassis).addInterface(msg.port).updateLLDPTimestamp();
 }
 
 function handle_udebug_config(config)
@@ -220,8 +203,8 @@ export default function () {
 	for (let ifname in opts.interface) {
 		let ifc = model.addLocalInterface(ifname);
 		if (ifc?.pending != true) {
-			uloop.handle(ifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
-			uloop.handle(ifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+			ifc.i1905sock.handler(handle_i1905_input);
+			ifc.lldpsock.handler(handle_lldp_input);
 		}
 		else {
 			log.error(`Unable to initialize interface ${ifname}: ${socket.error()}`);
@@ -234,8 +217,8 @@ export default function () {
 			let br = model.addLocalBridge(bridge);
 			for (let ifname, portifc in br?.ports) {
 				if (portifc.ieee1905) {
-					uloop.handle(portifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
-					uloop.handle(portifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+					portifc.i1905sock.handler(handle_i1905_input);
+					portifc.lldpsock.handler(handle_lldp_input);
 				}
 			}
 		}
@@ -251,8 +234,8 @@ export default function () {
 		if (added && portifc.ieee1905) {
 			portifc.i1905sock.debug_config(model.udebug_config);
 			portifc.lldpsock.debug_config(model.udebug_config);
-			uloop.handle(portifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
-			uloop.handle(portifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+			portifc.i1905sock.handler(handle_i1905_input);
+			portifc.lldpsock.handler(handle_lldp_input);
 
 			proto_topology.start();
 		}

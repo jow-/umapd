@@ -25,6 +25,7 @@ import {
 import { request as rtrequest, 'const' as rtconst } from 'rtnl';
 import { pack } from 'struct';
 import * as udebug from 'udebug';
+import * as uloop from 'uloop';
 
 import utils from 'umap.utils';
 import defs from 'umap.defs';
@@ -44,6 +45,17 @@ function sockfail(sock, msg) {
 	err = `${msg}: ${serr}`;
 
 	return null;
+}
+
+function uloop_handler(flags) {
+	let sock = this.handle();
+	while (sock.cb) {
+		let payload = sock.recv();
+		if (!payload)
+			break;
+
+		call(sock.cb, sock, null, payload);
+	}
 }
 
 export default {
@@ -240,6 +252,20 @@ export default {
 		}
 	},
 
+	handler: function(cb) {
+		this.cb = cb;
+		if (!!cb == !!this.handle)
+			return;
+
+		if (!cb) {
+			this.handle.delete();
+			delete this.handle;
+			return;
+		}
+
+		this.handle = uloop.handle(this, uloop_handler, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+	},
+
 	send: function (src, dest, data) {
 		let smac = hexdec(src ?? this.address, ':'),
 			dmac = hexdec(dest, ':'),
@@ -283,6 +309,9 @@ export default {
 
 		if (this.debug_rx)
 			this.debug_rx.close();
+
+		if (this.handle)
+			this.handle.delete();
 
 		return this.socket.close();
 	},
