@@ -59,15 +59,19 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 		return;
 	}
 
-	const handled = msg.run_handler()
-		|| proto_topology.handle_cmdu(i1905lif, dstmac, srcmac, msg)
-		|| proto_autoconf.handle_cmdu(i1905lif, dstmac, srcmac, msg)
-		|| proto_capab.handle_cmdu(i1905lif, dstmac, srcmac, msg)
-		|| proto_scanning.handle_cmdu(i1905lif, dstmac, srcmac, msg)
-		;
+	try {
+		const handled = msg.run_handler()
+		        || proto_topology.handle_cmdu(i1905lif, dstmac, srcmac, msg)
+		        || proto_autoconf.handle_cmdu(i1905lif, dstmac, srcmac, msg)
+		        || proto_capab.handle_cmdu(i1905lif, dstmac, srcmac, msg)
+		        || proto_scanning.handle_cmdu(i1905lif, dstmac, srcmac, msg)
+		        ;
 
-	if (!handled)
-		log.warn(`Not handling CMDU [${msg.mid}] ${utils.cmdu_type_ntoa(msg.type)}`);
+		if (!handled)
+			log.warn(`Not handling CMDU [${msg.mid}] ${utils.cmdu_type_ntoa(msg.type)}`);
+	} catch(e) {
+		log.exception(e);
+	}
 
 	if (msg.flags & defs.CMDU_F_ISRELAY) {
 		const key = `${al_mac}-${msg.mid}`;
