@@ -14,6 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+import log from 'umap.log';
+
 const handlers = {};
 
 export default {
@@ -37,8 +39,13 @@ export default {
 		if (!(eventtype in handlers))
 			return false;
 
-		for (let fn in handlers[eventtype])
-			fn(payload);
+		for (let fn in handlers[eventtype]) {
+			try {
+				fn(payload);
+			} catch(e) {
+				log.exception(e);
+			}
+		}
 
 		return true;
 	},
