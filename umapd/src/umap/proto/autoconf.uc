@@ -211,8 +211,10 @@ const IAgentSession = {
 	handle_cmdu: function (i1905lif, dstmac, srcmac, msg) {
 		if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_RESPONSE) {
 			// Ignore autoconf responses not belonging to our pending requests
-			if (!(msg.mid in this.midsInFlight))
-				return this.debug(`unexpected AP Auto-Configuration reponse`);
+			if (!(msg.mid in this.midsInFlight)) {
+				this.debug(`unexpected AP Auto-Configuration reponse`);
+				return false;
+			}
 
 			this.debug(`received AP Auto-Configuration response`);
 
@@ -242,16 +244,18 @@ const IAgentSession = {
 			return true;
 		}
 		else if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_WSC) {
-			if (this.state != 'config_request')
-				return this.warn(`received WSC message while not in config request state`);
-
 			if (srcmac != this.controller.address)
 				return this.warn(`received WSC message from unexpected address ${srcmac}, expected ${this.controller.address}`);
 
 			const radio_id = msg.get_tlv(defs.TLV_AP_RADIO_IDENTIFIER);
 
-			if (radio_id != this.radio.address)
-				return this.debug(`ignoring WSC message for different radio ${radio_id}`);
+			if (radio_id != this.radio.address) {
+				this.debug(`ignoring WSC message for different radio ${radio_id}`);
+				return false;
+			}
+
+			if (this.state != 'config_request')
+				return this.warn(`received WSC message while not in config request state`);
 
 			const wscFrames = msg.get_tlvs(defs.TLV_WSC);
 
@@ -277,8 +281,10 @@ const IAgentSession = {
 			return true;
 		}
 		else if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_RENEW) {
-			if (this.state != 'idle')
-				return this.warn(`ignoring renew request while not idle`);
+			if (this.state != 'idle') {
+				this.debug(`ignoring renew request while not idle`);
+				return false;
+			}
 
 			const al_mac = msg.get_tlv(defs.TLV_IEEE1905_AL_MAC_ADDRESS);
 
