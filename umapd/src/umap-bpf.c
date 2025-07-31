@@ -27,6 +27,19 @@ struct umapsocket_addr_val {
 	u8 __pad;
 };
 
+struct umapsocket_stats_type {
+	u64 packets;
+	u64 bytes;
+};
+
+struct umapsocket_stats {
+	struct {
+		struct umapsocket_stats_type unicast;
+		struct umapsocket_stats_type multicast;
+		struct umapsocket_stats_type broadcast;
+	} rx, tx;
+};
+
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, struct umapsocket_addr_key);
@@ -35,9 +48,49 @@ struct {
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 } addr_map SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, __u32);
+	__type(value, struct umapsocket_stats);
+	__uint(max_entries, 128);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+} stats_map SEC(".maps");
+
+SEC("tc")
+int egress(struct __sk_buff *skb)
+{
+	struct umapsocket_stats_type *stype;
+	struct umapsocket_stats *stats;
+	u32 ifindex = skb->ifindex;
+	u32 *data;
+
+	data = skb_ptr(skb, 0, ETH_ALEN);
+	if (!data)
+		return TC_ACT_UNSPEC;
+
+	stats = bpf_map_lookup_elem(&stats_map, &ifindex);
+	if (stats) {
+		uint8_t *addr = (uint8_t *)data;
+
+		if (!(data[0] & 1))
+			stype = &stats->tx.unicast;
+		else if (*data == 0xffffffff && *(uint16_t *)&data[1] == 0xffff)
+			stype = &stats->tx.broadcast;
+		else
+			stype = &stats->tx.multicast;
+
+		__sync_fetch_and_add(&stype->packets, 1);
+		__sync_fetch_and_add(&stype->bytes, skb->len);
+	}
+
+	return TC_ACT_UNSPEC;
+}
+
 SEC("tc")
 int ingress(struct __sk_buff *skb)
 {
+	struct umapsocket_stats_type *stype;
+	struct umapsocket_stats *stats;
 	struct umapsocket_addr_key key;
 	struct umapsocket_addr_val *val;
 	struct skb_parser_info info;
@@ -58,6 +111,25 @@ int ingress(struct __sk_buff *skb)
 
 	skb_parse_vlan(&info);
 	skb_parse_vlan(&info);
+
+	data = skb_ptr(skb, 0, ETH_ALEN);
+	if (!data)
+		return TC_ACT_UNSPEC;
+
+	stats = bpf_map_lookup_elem(&stats_map, &ifindex);
+	if (stats) {
+		uint8_t *addr = (uint8_t *)data;
+
+		if (!(data[0] & 1))
+			stype = &stats->rx.unicast;
+		else if (*data == 0xffffffff && *(uint16_t *)&data[1] == 0xffff)
+			stype = &stats->rx.broadcast;
+		else
+			stype = &stats->rx.multicast;
+
+		__sync_fetch_and_add(&stype->packets, 1);
+		__sync_fetch_and_add(&stype->bytes, skb->len);
+	}
 
 	if (info.proto != bpf_htons(ETH_P_LLDP) &&
 		info.proto != bpf_htons(ETH_P_1905))

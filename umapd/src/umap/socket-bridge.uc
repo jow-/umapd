@@ -28,7 +28,7 @@ import {
 	'const' as rtc
 } from 'rtnl';
 
-import { readfile } from 'fs';
+import { readfile, access } from 'fs';
 import { pack, unpack } from 'struct';
 import log from 'umap.log';
 import usocket from 'umap.socket';
@@ -40,10 +40,38 @@ import utils from 'umap.utils';
 let err;
 const bpf_prio = 0x90;
 
+const bpf_stats_keys = [
+	"unicast_packets_received",
+	"unicast_bytes_received",
+	"multicast_packets_received",
+	"multicast_bytes_received",
+	"broadcast_packets_received",
+	"broadcast_bytes_received",
+	"unicast_packets_sent",
+	"unicast_bytes_sent",
+	"multicast_packets_sent",
+	"multicast_bytes_sent",
+	"broadcast_packets_sent",
+	"broadcast_bytes_sent",
+];
+
 function failure(msg) {
 	err = msg;
 
 	return null;
+}
+
+function bpf_map_stats_set(sockbr, ifindex, add) {
+	let map = sockbr.bpf_map_stats;
+	let key = pack('I', ifindex);
+	if (!add)
+		return map.delete(key);
+
+	let val = '';
+	for (let i = 0; i < 6; i++)
+		val += pack('QQ', 0, 0);
+
+	map.set(key, val, bpf.BPF_NOEXIST);
 }
 
 function bpf_map_entry_set(sockbr, mac, proto, clone, add) {
@@ -75,11 +103,19 @@ function bpf_init(sockbr) {
 
 	let map = sockbr.bpf_map = mod.get_map('addr_map');
 	if (!map)
-		return failure('Failed to get BPF map');
+		return failure('Failed to get BPF address map');
 
-	let prog = sockbr.bpf_prog = mod.get_program('ingress');
+	map = sockbr.bpf_map_stats = mod.get_map('stats_map');
+	if (!map)
+		return failure('Failed to get BPF stats map');
+
+	let prog = sockbr.bpf_prog_in = mod.get_program('ingress');
 	if (!prog)
-		return failure('Failed to get BPF program');
+		return failure('Failed to get ingress BPF program');
+
+	prog = sockbr.bpf_prog_out = mod.get_program('egress');
+	if (!prog)
+		return failure('Failed to get egress BPF program');
 
 	bpf_map_address_set(sockbr, null, true);
 
@@ -200,6 +236,24 @@ const bridge_member_proto = {
 };
 
 const bridge_proto = {
+	stats: function (ifname) {
+		let ifindex = +readfile(`/sys/class/net/${ifname}/ifindex`);
+		let key = pack('I', ifindex);
+		let val = this.bpf_map_stats.get(key);
+		if (!val)
+			return;
+
+		val = unpack('QQQQQQQQQQQQ', val);
+		if (!val)
+			return;
+
+		let stats = {};
+		for (let i = 0; i < length(bpf_stats_keys); i++)
+			stats[bpf_stats_keys[i]] = val[i];
+
+		return stats;
+	},
+
 	member_update: function(ifname, address, add) {
 		let member = this.members[ifname];
 		if (!member)
@@ -208,18 +262,22 @@ const bridge_proto = {
 				bridge: this
 			};
 
-		if (member.ifindex)
+		let ifindex = add ? +readfile(`/sys/class/net/${ifname}/ifindex`) : 0;
+		if (member.ifindex && member.ifindex != ifindex) {
+			bpf_map_stats_set(this, member.ifindex, false);
 			delete this.ifindex_members[''+member.ifindex];
+		}
+
 		if (!add || (member.address && address != member.address))
 			bpf_map_address_set(this, member.address, false);
 
 		if (!add) {
 			delete this.members[ifname];
 			bpf.tc_detach(ifname, 'ingress', bpf_prio);
+			bpf.tc_detach(ifname, 'egress', bpf_prio);
 			return true;
 		}
 
-		let ifindex = +readfile(`/sys/class/net/${ifname}/ifindex`);
 		if (!ifindex)
 			return failure(`Could not get ifindex for interface ${ifname}`);
 
@@ -227,7 +285,14 @@ const bridge_proto = {
 		member.address = address;
 		this.ifindex_members[''+ifindex] = member;
 		bpf_map_address_set(this, member.address, true);
-		if (!this.bpf_prog.tc_attach(ifname, 'ingress', bpf_prio, this.ifindex))
+		if (access(`/sys/class/net/${ifname}/phy80211`)) {
+			if (!this.bpf_prog_out.tc_attach(ifname, 'egress', bpf_prio, this.ifindex))
+				return failure(`Failed to attach BPF program to bridge member ${ifname}`);
+
+			bpf_map_stats_set(this, ifindex, true);
+		}
+
+		if (!this.bpf_prog_in.tc_attach(ifname, 'ingress', bpf_prio, this.ifindex))
 			return failure(`Failed to attach BPF program to bridge member ${ifname}`);
 
 		return true;
