@@ -200,6 +200,9 @@ export default function () {
 	// FIXME: rework this
 	model.ubus = ubus;
 
+	model.isController = !!opts.controller;
+	model.initializeAddress();
+
 	for (let ifname in opts.interface) {
 		let ifc = model.addLocalInterface(ifname);
 		if (ifc?.pending != true) {
@@ -228,8 +231,6 @@ export default function () {
 		}
 	}
 
-	model.isController = !!opts.controller;
-	model.initializeAddress();
 	model.observeDeviceChanges(function (portifc, added) {
 		if (added && portifc.ieee1905) {
 			portifc.i1905sock.debug_config(model.udebug_config);

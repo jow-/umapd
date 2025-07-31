@@ -10,9 +10,10 @@ PKG_NAME:=umapd
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 
-PKG_BUILD_DEPENDS:=ucode
+PKG_BUILD_DEPENDS:=ucode bpf-headers
 
 include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/bpf.mk
 
 
 define Package/umapd
@@ -23,11 +24,16 @@ define Package/umapd
   DEPENDS:=+libopenssl +ucode \
 	+ucode-mod-fs +ucode-mod-nl80211 +ucode-mod-rtnl +ucode-mod-socket \
 	+ucode-mod-struct +ucode-mod-ubus +ucode-mod-uci +ucode-mod-uloop \
-	+ucode-mod-udebug +kmod-veth
+	+ucode-mod-udebug +ucode-mod-bpf +kmod-veth $(BPF_DEPENDS)
 endef
 
 define Package/umapd/description
   The umapd daemon is an implementation of the Wi-Fi EasyMesh standard.
+endef
+
+define Build/Compile
+	$(call Build/Compile/Default)
+	$(call CompileBPF,$(PKG_BUILD_DIR)/umap-bpf.c)
 endef
 
 LIBS:=umap/*.so
@@ -46,10 +52,11 @@ define Package/umapd/install
 			$(addprefix $(PKG_BUILD_DIR)/,$(file)) \
 			$(1)/usr/share/ucode/$(dir $(file)); )
 
-	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config $(1)/usr/libexec/umap
+	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config $(1)/usr/libexec/umap $(1)/lib/bpf
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/umap.uc $(1)/usr/sbin/umapd
 	$(INSTALL_CONF) ./files/umapd.config $(1)/etc/config/umapd
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wifi-apply.uc $(1)/usr/libexec/umap/wifi-apply
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/umap-bpf.o $(1)/lib/bpf/umap.o
 endef
 
 define Package/umap-agent

@@ -20,6 +20,7 @@ import { pack, unpack, buffer } from 'struct';
 import { access, open, readfile, lsdir } from 'fs';
 
 import socket from 'umap.socket';
+import brsocket from 'umap.socket-bridge';
 import * as codec from 'umap.tlv.codec';
 import log from 'umap.log';
 import defs from 'umap.defs';
@@ -356,10 +357,11 @@ const I1905RemoteInterface = proto({
 }, I1905Entity);
 
 const I1905LocalInterface = proto({
-	new: function (ifname, vlan) {
+	new: function (ifname, vlan, sockbr) {
 		const ifc = proto({
 			ifname,
 			vlan,
+			sockbr,
 			pending: true,
 			ieee1905: false,
 			neighbors: []
@@ -381,10 +383,12 @@ const I1905LocalInterface = proto({
 
 		log.info(`Listening on interface ${link.ifname} (${link.address}${this.vlan ? `, VLAN ${this.vlan}` : ''})`);
 
-		if (!(this.i1905sock = socket.create(link.ifname, socket.const.ETH_P_1905, this.vlan)))
+		let socktype = this.sockbr ?? socket;
+
+		if (!(this.i1905sock = socktype.create(link.ifname, socket.const.ETH_P_1905, this.vlan)))
 			die(`Unable to spawn IEEE 1905 TX socket on ${link.ifname}: ${socket.error()}`);
 
-		if (!(this.lldpsock = socket.create(link.ifname, socket.const.ETH_P_LLDP, this.vlan)))
+		if (!(this.lldpsock = socktype.create(link.ifname, socket.const.ETH_P_LLDP, this.vlan)))
 			die(`Unable to spawn LLDP TX socket on ${link.ifname}: ${socket.error()}`);
 
 		this.ieee1905 = !check_non_ieee1905_bss(this.ifname);
@@ -772,6 +776,14 @@ const I1905LocalBridge = proto({
 		this.vlan = vlan;
 		this.link = link;
 		this.pending = false;
+		if (!model.sockbr[bridge]) {
+			let sockbr = brsocket.create(bridge + '-umap', model.address);
+			if (!sockbr)
+				return log.error(`Error creating bridge socket: ${brsocket.error()}`);
+			model.sockbr[bridge] = sockbr;
+		}
+
+		this.sockbr = model.sockbr[bridge];
 
 		for (let link in resolve_bridge_ports(this.brname))
 			this.addPort(link, link.vlan != null);
@@ -783,7 +795,7 @@ const I1905LocalBridge = proto({
 		if (exists(this.ports, link.ifname))
 			return this.ports[link.ifname];
 
-		const i1905lif = (this.ports[link.ifname] = I1905LocalInterface.new(link.ifname, tagged ? this.vlan : null));
+		const i1905lif = (this.ports[link.ifname] = I1905LocalInterface.new(link.ifname, tagged ? this.vlan : null, this.sockbr));
 
 		if (model.address != '00:00:00:00:00:00')
 			this.updatePortFilter(i1905lif.ifname, true);
@@ -808,41 +820,13 @@ const I1905LocalBridge = proto({
 		if (!i1905lif)
 			return false;
 
-		if (!access('/sbin/tc', 'x'))
-			return false;
+		let ret = this.sockbr.member_update(ifname, i1905lif.address, add);
+		if (!ret)
+			log.error(`Error updating port filter: ${brsocket.error()}`);
+		else
+			log.info(`Updated port filter for ${ifname}`);
 
-		const rules = [];
-
-		for (let mac in [defs.IEEE1905_MULTICAST_MAC, i1905lif.address, model.address]) {
-			push(rules,
-				sprintf(
-					"dev '%s' pref 1 protocol 0x%04x ingress u32 " +
-					"match u16 0x%04x 0xffff at -14 " +
-					"match u32 0x%08x 0xffffffff at -12 " +
-					"action drop",
-					i1905lif.ifname, socket.const.ETH_P_1905,
-					...unpack('!HL', hexdec(mac, ':'))
-				)
-			);
-		}
-
-		let success = true;
-
-		for (let rule in rules)
-			system(`/sbin/tc filter del ${rule} 2>/dev/null`);
-
-		if (add) {
-			system(`/sbin/tc qdisc add dev '${i1905lif.ifname}' clsact 2>/dev/null`);
-
-			for (let rule in rules) {
-				log.debug(`adding TC filter ${rule}`);
-
-				if (!system(`/sbin/tc filter add ${rule}`))
-					success = false;
-			}
-		}
-
-		return success;
+		return ret;
 	}
 }, I1905Entity);
 
@@ -1246,6 +1230,7 @@ model = proto({
 	address: '00:00:00:00:00:00',
 	interfaces: {},
 	bridges: {},
+	sockbr: {},
 	devices: [],
 	radios: [],
 	topologyChanged: false,
