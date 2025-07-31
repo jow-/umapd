@@ -115,6 +115,8 @@ export default {
 		if (vlan) {
 			const prog = {
 				filter: [
+					0x28, 0, 0, 0xfffff004, // Load pkttype
+					0x15, 16, 0, 0x00000004, // Drop if outgoing
 					0x30, 0, 0, 0xfffff030, // Load VLAN_TAG_PRESENT flag
 					0x15, 4, 0, 0x00000001, // If present skip fallback check
 					0x28, 0, 0, 0x0000000c, // Load ethertype at offset 12
@@ -143,6 +145,8 @@ export default {
 		else {
 			const prog = {
 				filter: [
+					0x28, 0, 0, 0xfffff004, // Load pkttype
+					0x15, 3, 0, 0x00000004, // Drop if outgoing
 					0x28, 0, 0, 0x0000000c, // Load ethertype at offset 12
 					0x15, 0, 1, ethproto, // Protocol matches?
 					0x6, 0, 0, 0x00002000, // Return true
