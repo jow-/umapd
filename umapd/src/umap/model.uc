@@ -1356,7 +1356,8 @@ model = proto({
 
 				log.info(`Adding port ${ifname} to bridge ${brname}`);
 				interfaces[ifname] = bridges[brname].addPort(rtevent.msg, false);
-				port_change_cb(interfaces[ifname], true);
+				if (!interfaces[ifname].pending)
+					port_change_cb(interfaces[ifname], true);
 			}
 			else {
 				/* ignore delete link events not removing the entire interface */
