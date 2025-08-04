@@ -18,6 +18,7 @@ import { request as wlrequest, 'const' as wlconst, error as wlerror } from 'nl80
 import { popen, readfile } from 'fs';
 import { unpack, buffer } from 'struct';
 import { cursor } from 'uci';
+import { find_phy } from 'wifi.utils';
 
 import events from 'umap.events';
 import ubus from 'umap.ubusclient';
@@ -636,7 +637,31 @@ const IWireless = {
 		}, null, ['hostapd.*']);
 	},
 
-	addRadio: function (phyname) {
+	addRadio: function (name) {
+		let _uci = cursor();
+
+		let config = _uci.get_all('wireless', name);
+		if (config && config['.type'] != 'wifi-device') {
+			log.warn(`Invalid radio config section ${name}`);
+			return;
+		}
+
+		let phyname = name;
+		if (config) {
+			phyname = find_phy(config);
+			if (!phyname) {
+				log.warn(`Could not find phy for radio config ${name}`);
+				return;
+			}
+		} else {
+			/* lookup corresponding uci wifi-device section for phy */
+			cursor().foreach('wireless', 'wifi-device', wifi => {
+				if (find_phy(wifi) == phyname)
+					config = wifi;
+
+			});
+		}
+
 		let existing = filter(this.radios, radio => radio.phyname == phyname)[0];
 		if (existing != null) {
 			log.warn(`Radio phy '${phyname}' already present`);
@@ -673,23 +698,18 @@ const IWireless = {
 		}
 
 		supported_bands = sort(supported_bands);
+		const rf_band = uci_band_to_rf_band(config.band);
+		let band = (rf_band in supported_bands) ? rf_band : null;
 
 		let radio = proto({
 			phyname,
 			index: +idx,
 			info: phy,
+			band,
+			config: config['.name'],
 			address: readfile(`/sys/class/ieee80211/${phyname}/macaddress`, 17)
 		}, IRadio);
 
-		/* lookup corresponding uci wifi-device section for phy */
-		cursor().foreach('wireless', 'wifi-device', wifi => {
-			let wifi_phyname = trim(popen(`/usr/bin/iwinfo nl80211 phyname '${wifi['.name']}'`, 'r').read('line'));
-			if (wifi_phyname == phyname) {
-				const rf_band = uci_band_to_rf_band(wifi.band);
-				radio.config = wifi['.name'];
-				radio.band = (rf_band in supported_bands) ? rf_band : null;
-			}
-		});
 
 		/* if no explicit band is configured on the radio, intelligently guess default band */
 		if (radio.band == null) {
