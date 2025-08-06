@@ -63,4 +63,9 @@ export default {
 	warn: function (fmt, ...args) { this.cond_warn(true, '[W] ', fmt, ...args) },
 	error: function (fmt, ...args) { this.cond_warn(true, '[E] ', fmt, ...args) },
 	info: function (fmt, ...args) { this.cond_warn(true, '[I] ', fmt, ...args) },
+	exception: function(e) {
+		let lines = split(`Exception: ${e}\n${e.stacktrace[0].context}`, '\n');
+		for (let line in lines)
+			this.error('%s', line);
+	}
 };
