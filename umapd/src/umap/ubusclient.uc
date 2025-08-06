@@ -14,9 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-import { connect as ubus_connect, error as ubus_error } from 'ubus';
+import { connect as ubus_connect, error as ubus_error, guard } from 'ubus';
+import log from 'umap.log';
 
 let ubusconn = null;
+guard((e) => log.exception(e));
 
 export default {
 	connect: function () {
