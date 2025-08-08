@@ -308,6 +308,9 @@ export default {
 		if (append_eom)
 			this.ensure_eom();
 
+		if (!success)
+			die(`Failed to add TLV [${type}]`);
+
 		return success;
 	},
 
