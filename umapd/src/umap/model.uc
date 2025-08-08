@@ -24,6 +24,7 @@ import * as codec from 'umap.tlv.codec';
 import log from 'umap.log';
 import defs from 'umap.defs';
 import ubus from 'umap.ubusclient';
+import utils from 'umap.utils';
 
 import wireless from 'umap.wireless';
 
@@ -139,23 +140,56 @@ function encode_local_interface(i1905lif) {
 				break;
 		}
 
-		for (let band in info.wifi.phy.wiphy_bands) {
-			for (let i, freq in band?.freqs) {
-				if (freq.freq == info.wifi.interface.center_freq1)
-					chan1 = i + 1;
-				else if (freq.freq == info.wifi.interface.center_freq2)
-					chan2 = i + 1;
-			}
-		}
+		if (info.wifi.interface.center_freq1)
+			chan1 = wireless.frequencyToChannel(info.wifi.interface.center_freq1) ?? 0;
+
+		if (info.wifi.interface.center_freq2)
+			chan2 = wireless.frequencyToChannel(info.wifi.interface.center_freq2) ?? 0;
 
 		media_info = pack('!6sBBBB', hexdec(info.wifi.interface.mac, ':'), role, chanbw, chan1, chan2);
 	}
 
 	return {
 		local_if_mac_address: info.address,
-		media_type: info.type ?? 0,  // FIXME
+		media_type: i1905lif.getMediaType() ?? 0,
 		media_specific_information: media_info
 	};
+}
+
+function decode_media_info(tlv_local_interface) {
+	const ieee80211_roles = {
+		[0b00000000]: 'AP',
+		[0b01000000]: 'STA',
+		[0b10000000]: 'Wi-Fi P2P Client',
+		[0b10010000]: 'Wi-Fi P2P Group Owner',
+		[0b10100000]: '802.11adPCP'
+	};
+
+	const ieee80211_bw = {
+		[0]: '20/40 MHz',
+		[1]: '80 MHz',
+		[2]: '160 MHz',
+		[3]: '80+80 MHz'
+	};
+
+	if ((tlv_local_interface.media_type & 0xff00) == 0x0100) {
+		let mi = unpack('!6sBBBB', tlv_local_interface.media_specific_information);
+
+		if (!mi)
+			return null;
+
+		return {
+			bssid: utils.ether_ntoa(mi[0]),
+			role: mi[1],
+			role_name: ieee80211_roles[mi[1]] ?? 'Unknown/Reserved',
+			bandwidth: mi[2],
+			bandwidth_name: ieee80211_bw[mi[2]] ?? 'Unknown/Reserved',
+			channel1: mi[3],
+			channel2: mi[4]
+		};
+	}
+
+	return null;
 }
 
 function encode_device_identification() {
@@ -912,15 +946,19 @@ I1905Device = proto({
 	},
 
 	getInterfaceInformation: function () {
-		let d = this.tlvs[defs.TLV_DEVICE_INFORMATION]?.[1];
+		let d = this.tlvs[defs.TLV_IEEE1905_DEVICE_INFORMATION]?.[1];
 		let interfaces = {};
 
-		for (let iface in decode_tlv(defs.TLV_DEVICE_INFORMATION, d)?.ifaces)
-			interfaces[iface.address] ??= iface;
+		for (let iface in decode_tlv(defs.TLV_IEEE1905_DEVICE_INFORMATION, d)?.local_interfaces) {
+			interfaces[iface.local_if_mac_address] ??= {
+				...iface,
+				media_specific_information: decode_media_info(iface)
+			};
+		}
 
 		for (let i1905if in this.interfaces) {
 			interfaces[i1905if.address] ??= {
-				address: i1905if.address,
+				local_if_mac_address: i1905if.address,
 				media_type: 0,
 				media_type_name: 'Unknown'
 			};
@@ -1045,7 +1083,7 @@ I1905Device = proto({
 			for (let i = 1; i < length(tlvs); i++) {
 				//let neighbor, addresses;
 				switch (+type) {
-					//case defs.TLV_DEVICE_INFORMATION:
+					//case defs.TLV_IEEE1905_DEVICE_INFORMATION:
 					//	res.info = decode_tlv(+type, tlvs[i]);
 					//	break;
 
