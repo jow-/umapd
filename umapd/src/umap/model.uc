@@ -301,6 +301,16 @@ function resolve_bridge_ports(ifname) {
 	return links;
 }
 
+function check_non_ieee1905_bss(ifname) {
+	if (access(`/sys/class/net/${ifname}/phy80211/index`))
+		for (let radioname, radiostate in ubus.call('network.wireless', 'status'))
+			for (let wif in radiostate.interfaces)
+				if (wif.ifname == ifname && !(wif.config?.multi_ap & 1))
+					return true;
+
+	return false;
+}
+
 const I1905Entity = {
 	update: function () {
 		this.seen = timems();
@@ -351,6 +361,7 @@ const I1905LocalInterface = proto({
 			ifname,
 			vlan,
 			pending: true,
+			ieee1905: false,
 			neighbors: []
 		}, this);
 
@@ -376,6 +387,7 @@ const I1905LocalInterface = proto({
 		if (!(this.lldpsock = socket.create(link.ifname, socket.const.ETH_P_LLDP, this.vlan)))
 			die(`Unable to spawn LLDP TX socket on ${link.ifname}: ${socket.error()}`);
 
+		this.ieee1905 = !check_non_ieee1905_bss(this.ifname);
 		this.address = link.address;
 		this.pending = false;
 
@@ -1342,13 +1354,6 @@ model = proto({
 				if (!exists(bridges, brname))
 					return;
 
-				/* ignore non-backhaul BSSes */
-				if (access(`/sys/class/net/${ifname}/phy80211/index`))
-					for (let radioname, radiostate in ubus.call('network.wireless', 'status'))
-						for (let wif in radiostate.interfaces)
-							if (wif.ifname == ifname && !(wif.config.multi_ap & 1))
-								return;
-
 				log.info(`Adding port ${ifname} to bridge ${brname}`);
 				interfaces[ifname] = bridges[brname].addPort(rtevent.msg, false);
 				port_change_cb(interfaces[ifname], true);
@@ -1463,6 +1468,23 @@ model = proto({
 
 	getRadios: function () {
 		return [...wireless.radios];
+	},
+
+	sendController: function (cmdu, flags) {
+		if (!this.networkController)
+			return false;
+
+		cmdu.send(this.networkController.i1905lif.i1905sock,
+			this.address, this.networkController.address, flags ?? 0);
+
+		return true;
+	},
+
+	sendMulticast: function (cmdu, destination, flags) {
+		for (let i = 1; i < length(this.devices); i++)
+			if (this.devices[i].ieee1905)
+				cmdu.send(this.devices[i].i1905sock, this.address,
+					destination ?? defs.IEEE1905_MULTICAST_MAC, flags ?? 0);
 	},
 
 	updateSelf: function () {
