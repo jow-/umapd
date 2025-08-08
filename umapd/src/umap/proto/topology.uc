@@ -38,8 +38,6 @@ const TOPOLOGY_CLEANUP_INTERVAL = 5000;
 let started = false;
 
 function emit_topology_discovery() {
-	this.set(TOPOLOGY_DISCOVERY_INTERVAL);
-
 	for (let i1905lif in model.getLocalInterfaces()) {
 		let lldpdu = lldp.create(model.address, i1905lif.address, 180);
 
@@ -150,8 +148,10 @@ const IProtoTopology = {
 		if (started)
 			return;
 
-		timer(TOPOLOGY_DISCOVERY_DELAY,
-			() => interval(TOPOLOGY_DISCOVERY_INTERVAL, emit_topology_discovery));
+		timer(TOPOLOGY_DISCOVERY_DELAY, function() {
+			emit_topology_discovery();
+			interval(TOPOLOGY_DISCOVERY_INTERVAL, emit_topology_discovery);
+		});
 
 		interval(TOPOLOGY_SELFUPDATE_INTERVAL, () => model.updateSelf());
 		interval(TOPOLOGY_CLEANUP_INTERVAL, () => model.collectGarbage());
