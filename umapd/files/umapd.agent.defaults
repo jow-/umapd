@@ -24,10 +24,6 @@ uci -q get umapd.@agent[0] | grep -q agent || {
     uci set umapd.@agent[0].verbosity=1
     uci add_list umapd.@agent[0].bridge=easymesh0
 
-    if [ -x /etc/init.d/umap-controller ]; then
-        uci set umapd.@agent[0].no_ubus=1
-    fi
-
     radio_num=0
 
     while uci -q get wireless.@wifi-device[$radio_num] | grep -q wifi-device; do

@@ -140,7 +140,6 @@ export default function () {
 		'bridge|b=s*',
 		'radio|phy|r=s*',
 		'controller',
-		'no-ubus',
 		'mac=s',
 		'v+',
 		'help'
@@ -236,7 +235,7 @@ export default function () {
 	proto_capab.init();
 	proto_scanning.init();
 
-	if (!('no-ubus' in opts) && !ubus.publish())
+	if (!ubus.publish())
 		log.warn(`Unable to publish umap object: ${ubus.error()}`);
 
 	if (length(model.interfaces) > 0)
