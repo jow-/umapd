@@ -134,8 +134,8 @@ const IAgentSession = {
 
 		push(this.midsInFlight, msg.mid);
 
-		msg.send(this.controller.i1905lif.i1905sock,
-			model.address, this.controller.address);
+		msg.send(model.networkController.i1905lif.i1905sock,
+		         model.address, model.networkController.address);
 	},
 
 	step: function () {
@@ -232,11 +232,16 @@ const IAgentSession = {
 			if (!(controllerProfile in [0x01, 0x02, 0x03]))
 				return this.warn(`ignoring response advertising unsupported Multi-AP profile`);
 
-			this.controller = {
-				address: srcmac,
-				profile: controllerProfile,
-				i1905lif: i1905lif
-			};
+			if (!model.networkController) {
+				model.networkController = {
+					address: srcmac,
+					profile: controllerProfile,
+					i1905lif: i1905lif
+				};
+			}
+			else if (srcmac != model.networkController.address) {
+				return this.warn(`ignoring response from unexpected device ${al_mac}, expecting ${model.networkController.address}`);
+			}
 
 			this.transitionState('config_request');
 			this.step();
@@ -244,8 +249,8 @@ const IAgentSession = {
 			return true;
 		}
 		else if (msg.type == defs.MSG_AP_AUTOCONFIGURATION_WSC) {
-			if (srcmac != this.controller.address)
-				return this.warn(`received WSC message from unexpected address ${srcmac}, expected ${this.controller.address}`);
+			if (srcmac != model.networkController.address)
+				return this.warn(`received WSC message from unexpected address ${srcmac}, expected ${model.networkController.address}`);
 
 			const radio_id = msg.get_tlv(defs.TLV_AP_RADIO_IDENTIFIER);
 
@@ -291,8 +296,8 @@ const IAgentSession = {
 			if (!al_mac)
 				return this.warn(`ignoring incomplete renew request`);
 
-			if (al_mac != this.controller.address)
-				return this.warn(`ignoring renew request from unexpected device ${al_mac}, expecting ${this.controller.address}`);
+			if (al_mac != model.networkController.address)
+				return this.warn(`ignoring renew request from unexpected device ${al_mac}, expecting ${model.networkController.address}`);
 
 			const self = this;
 			timer(500, () => {
