@@ -99,8 +99,7 @@ const IAgentSession = {
 
 		push(this.midsInFlight, msg.mid);
 
-		for (let i1905lif in model.getLocalInterfaces())
-			msg.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
+		model.sendMulticast(msg, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
 	},
 
 	sendApAutoconfigurationWscM1: function () {
@@ -134,8 +133,7 @@ const IAgentSession = {
 
 		push(this.midsInFlight, msg.mid);
 
-		msg.send(model.networkController.i1905lif.i1905sock,
-		         model.address, model.networkController.address);
+		model.sendController(msg);
 	},
 
 	step: function () {
@@ -374,16 +372,14 @@ const IProtoAutoConf = {
 
 					log.warn(`autoconf: no WSC M1 from ${s.dstmac} for renew CMDU [${renew.mid}], retrying`);
 
-					for (let i1905lif in model.getLocalInterfaces())
-						renew.send(i1905lif.i1905sock, model.address, s.dstmac, cmdu.CMDU_F_ISRELAY);
+					model.sendMulticast(renew, s.dstmac, cmdu.CMDU_F_ISRELAY);
 
 					this.set(1000);
 					s.try++;
 				})
 			};
 
-			for (let i1905lif in model.getLocalInterfaces())
-				renew.send(i1905lif.i1905sock, model.address, i1905dev.al_address, cmdu.CMDU_F_ISRELAY);
+			model.sendMulticast(renew, i1905dev.al_address, cmdu.CMDU_F_ISRELAY);
 		}
 
 		return req.reply({ success: true });

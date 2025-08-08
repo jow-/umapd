@@ -79,8 +79,7 @@ const IProtoCapabilities = {
 			return req.reply(ret);
 		}, REPLY_HANDLER_TIMEOUT);
 
-		for (let i1905lif in model.getLocalInterfaces())
-			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+		model.sendMulticast(query, i1905dev.al_address);
 
 		return req.defer();
 	},
@@ -114,8 +113,7 @@ const IProtoCapabilities = {
 			return req.reply(ret);
 		}, REPLY_HANDLER_TIMEOUT);
 
-		for (let i1905lif in model.getLocalInterfaces())
-			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+		model.sendMulticast(query, i1905dev.al_address);
 
 		return req.defer();
 	},

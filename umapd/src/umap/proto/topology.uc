@@ -39,6 +39,9 @@ let started = false;
 
 function emit_topology_discovery() {
 	for (let i1905lif in model.getLocalInterfaces()) {
+		if (!i1905lif.ieee1905)
+			continue;
+
 		let lldpdu = lldp.create(model.address, i1905lif.address, 180);
 
 		lldpdu.send(i1905lif.lldpsock);
@@ -68,14 +71,11 @@ function emit_topology_notification(assoc_event) {
 		});
 	}
 
-	for (let i1905lif in model.getLocalInterfaces())
-		reply.send(i1905lif.i1905sock, model.address, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
-
+	model.sendMulticast(reply, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
 	model.topologyChanged = false;
 }
 
 function update_node_information() {
-	const i1905lifs = model.getLocalInterfaces();
 	const i1905self = model.getLocalDevice();
 
 	for (let i1905dev in model.getDevices()) {
@@ -86,29 +86,21 @@ function update_node_information() {
 
 		// query device information
 		query = cmdu.create(defs.MSG_TOPOLOGY_QUERY);
-
-		for (let i1905lif in i1905lifs)
-			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+		model.sendMulticast(query, i1905dev.al_address);
 
 		// query link metrics
 		query = cmdu.create(defs.MSG_LINK_METRIC_QUERY);
 		query.add_tlv(defs.TLV_LINK_METRIC_QUERY, { query_type: 0x00, /* all neighbors */ link_metrics_requested: 0x02 /* both Rx and Tx */ });
-
-		for (let i1905lif in i1905lifs)
-			query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+		model.sendMulticast(query, i1905dev.al_address);
 
 		if (model.isController) {
 			// query higher layer info
 			query = cmdu.create(defs.MSG_HIGHER_LAYER_QUERY);
-
-			for (let i1905lif in i1905lifs)
-				query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+			model.sendMulticast(query, i1905dev.al_address);
 
 			// query backhaul sta capability
 			query = cmdu.create(defs.MSG_BACKHAUL_STA_CAPABILITY_QUERY);
-
-			for (let i1905lif in i1905lifs)
-				query.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+			model.sendMulticast(query, i1905dev.al_address);
 		}
 	}
 }

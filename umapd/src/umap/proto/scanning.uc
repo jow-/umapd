@@ -483,8 +483,7 @@ const IProtoScanning = {
 			return req.reply(scan_params);
 		}, 60100, defs.MSG_IEEE1905_ACK);
 
-		for (let i1905lif in model.getLocalInterfaces())
-			msg.send(i1905lif.i1905sock, model.address, i1905dev.al_address);
+		model.sendMulticast(msg, i1905dev.al_address);
 
 		return req.defer();
 	},

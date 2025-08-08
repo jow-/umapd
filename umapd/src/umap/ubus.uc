@@ -35,7 +35,8 @@ const IUmapUbusProcedures = {
 					address: i1905lif.address,
 					type,
 					type_name: defs.MEDIA_TYPE[type] ?? 'Unknown/Reserved',
-					bridge: i1905lif.isBridged()
+					bridge: i1905lif.isBridged(),
+					ieee1905: i1905lif.ieee1905
 				});
 			}
 

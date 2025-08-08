@@ -1481,9 +1481,9 @@ model = proto({
 	},
 
 	sendMulticast: function (cmdu, destination, flags) {
-		for (let i = 1; i < length(this.devices); i++)
-			if (this.devices[i].ieee1905)
-				cmdu.send(this.devices[i].i1905sock, this.address,
+		for (let ifname, i1905lif in this.interfaces)
+			if (i1905lif.ieee1905)
+				cmdu.send(i1905lif.i1905sock, this.address,
 					destination ?? defs.IEEE1905_MULTICAST_MAC, flags ?? 0);
 	},
 

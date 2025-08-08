@@ -75,7 +75,7 @@ function handle_i1905_cmdu(i1905lif, dstmac, srcmac, msg) {
 			return log.warn(`Already relayed CMDU [${msg.mid}] from ${al_mac} (network loop?)`);
 
 		for (let i1905lif2 in model.getLocalInterfaces())
-			if (i1905lif2.i1905sock != i1905lif.i1905sock)
+			if (i1905lif2.ieee1905 && i1905lif2.i1905sock != i1905lif.i1905sock)
 				msg.send(i1905lif2.i1905sock, srcmac, defs.IEEE1905_MULTICAST_MAC, defs.CMDU_F_ISRELAY);
 
 		relayed_messages.set(key, true);
@@ -208,8 +208,10 @@ export default function () {
 		try {
 			let br = model.addLocalBridge(bridge);
 			for (let ifname, portifc in br?.ports) {
-				uloop.handle(portifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
-				uloop.handle(portifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+				if (portifc.ieee1905) {
+					uloop.handle(portifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+					uloop.handle(portifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
+				}
 			}
 		}
 		catch (e) {
@@ -221,7 +223,7 @@ export default function () {
 	model.isController = !!opts.controller;
 	model.initializeAddress();
 	model.observeDeviceChanges(function (portifc, added) {
-		if (added) {
+		if (added && portifc.ieee1905) {
 			uloop.handle(portifc.i1905sock, handle_i1905_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
 			uloop.handle(portifc.lldpsock, handle_lldp_input, uloop.ULOOP_READ | uloop.ULOOP_EDGE_TRIGGER);
 
