@@ -1150,25 +1150,25 @@ encoder[0x8a] = (buf, tlv) => {
 	if (type(tlv.ap_metrics_reporting_interval) != "int" || tlv.ap_metrics_reporting_interval < 0 || tlv.ap_metrics_reporting_interval > 255)
 		return null;
 
-	const radio_unique_identifier = hexdec(match(tlv.radio_unique_identifier, /^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$/i)?.[0], ":");
-
-	if (radio_unique_identifier == null)
-		return null;
-
 	if (type(tlv.radios) != "array" || length(tlv.radios) > 0xff)
 		return null;
 
 	buf.put('B', tlv.ap_metrics_reporting_interval);
 	buf.put('B', length(tlv.radios));
-	buf.put('6s', radio_unique_identifier);
 
 	for (let item in tlv.radios) {
 		if (type(item) != "object")
 			return null;
 
+		const radio_unique_identifier = hexdec(match(item.radio_unique_identifier, /^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$/i)?.[0], ":");
+
+		if (radio_unique_identifier == null)
+			return null;
+
 		if (type(item.sta_metrics_reporting_rcpi_threshold) != "int" || item.sta_metrics_reporting_rcpi_threshold < 0 || item.sta_metrics_reporting_rcpi_threshold > 220)
 			return null;
 
+		buf.put('6s', radio_unique_identifier);
 		buf.put('B', item.sta_metrics_reporting_rcpi_threshold);
 		buf.put('B', item.sta_metrics_reporting_rcpi_hysteresis_margin_override);
 		buf.put('B', item.ap_metrics_channel_utilization_reporting_threshold);
@@ -1518,23 +1518,13 @@ encoder[0x96] = (buf, tlv) => {
 		if (bssid == null)
 			return null;
 
-		const estimated_downlink_mac_data_rate = hexdec(match(item.estimated_downlink_mac_data_rate, /^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$/i)?.[0], ":");
-
-		if (estimated_downlink_mac_data_rate == null)
-			return null;
-
-		const estimated_uplink_mac_data_rate = hexdec(match(item.estimated_uplink_mac_data_rate, /^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$/i)?.[0], ":");
-
-		if (estimated_uplink_mac_data_rate == null)
-			return null;
-
 		if (type(item.uplink_rcpi) != "int" || item.uplink_rcpi < 0 || item.uplink_rcpi > 220)
 			return null;
 
 		buf.put('6s', bssid);
 		buf.put('!L', item.time_delta);
-		buf.put('6s', estimated_downlink_mac_data_rate);
-		buf.put('6s', estimated_uplink_mac_data_rate);
+		buf.put('!L', item.estimated_downlink_mac_data_rate);
+		buf.put('!L', item.estimated_uplink_mac_data_rate);
 		buf.put('B', item.uplink_rcpi);
 	}
 
@@ -1688,17 +1678,18 @@ encoder[0x9a] = (buf, tlv) => {
 		return null;
 
 	buf.put('6s', mac_address);
+	buf.put('1x');
 	buf.put('B', length(tlv.measurement_report_elements));
 
 	for (let item in tlv.measurement_report_elements) {
 		if (type(item) != "object")
 			return null;
 
-		if (type(item.report_data) != "string" || length(item.report_data) > 0xff - 18446744073709551613)
+		if (type(item.report_data) != "string" || length(item.report_data) > 0xff - 3)
 			return null;
 
 		buf.put('B', item.id);
-		buf.put('B', length(item.report_data));
+		buf.put('B', length(item.report_data) + 3);
 		buf.put('B', item.token);
 		buf.put('B', item.report_mode);
 		buf.put('B', item.type);
@@ -2596,6 +2587,7 @@ encoder[0xb4] = (buf, tlv) => {
 		return null;
 
 	buf.put('B', tlv.max_prioritization_rules);
+	buf.put('1x');
 	buf.put('B', 0
 		| ((tlv.byte_counter_unit & 0b00000011) << 6)
 		| (tlv.supports_prioritization << 5)
@@ -2693,6 +2685,7 @@ encoder[0xb7] = (buf, radios) => {
 				| (item2.transmitted_bssid << 2)
 			);
 
+			buf.put('1x');
 			buf.put('B', length(item2.ssid));
 			buf.put('*', item2.ssid);
 		}
@@ -3031,12 +3024,9 @@ encoder[0xc8] = (buf, tlv) => {
 
 // 0xc9 - Status Code
 // Wi-Fi EasyMesh
-encoder[0xc9] = (buf, tlv) => {
-	if (type(tlv) != "object")
-		return null;
+encoder[0xc9] = (buf, status_code) => {
 
-	buf.put('!H', tlv.octets_count);
-	buf.put('!H', tlv.status_code);
+	buf.put('!H', status_code);
 
 	return buf;
 };
@@ -3359,6 +3349,8 @@ encoder[0xd6] = (buf, opclasses) => {
 
 			buf.put('B', item2);
 		}
+
+		buf.put('4x');
 	}
 
 	return buf;
@@ -3404,6 +3396,7 @@ encoder[0xd7] = (buf, tlv) => {
 		buf.put('6s', transmitter_identifier);
 		buf.put('B', item.power_level);
 		buf.put('B', item.channel_usage_reason);
+		buf.put('4x');
 	}
 
 	return buf;
@@ -3445,6 +3438,7 @@ encoder[0xd8] = (buf, tlv) => {
 	buf.put('B', tlv.srg_obsspd_max_offset);
 	buf.put('!Q', tlv.srg_bss_color_bitmap);
 	buf.put('6s', srg_partial_bssid_bitmap);
+	buf.put('2x');
 
 	return buf;
 };
@@ -3487,6 +3481,7 @@ encoder[0xd9] = (buf, tlv) => {
 	buf.put('!Q', tlv.srg_bss_color_bitmap);
 	buf.put('6s', srg_partial_bssid_bitmap);
 	buf.put('!Q', tlv.used_neighbor_bss_colors);
+	buf.put('2x');
 
 	return buf;
 };
@@ -3544,6 +3539,8 @@ encoder[0xdb] = (buf, tlv) => {
 
 		buf.put('6s', _scs_disallowed_sta_mac);
 	}
+
+	buf.put('20x');
 
 	return buf;
 };
@@ -4756,7 +4753,7 @@ decoder[0x89] = (buf, end) => {
 // 0x8a - Metric Reporting Policy
 // Wi-Fi EasyMesh
 decoder[0x8a] = (buf, end) => {
-	if (buf.pos() + 8 > end)
+	if (buf.pos() + 2 > end)
 		return null;
 
 	const ap_metrics_reporting_interval = buf.get('B');
@@ -4765,13 +4762,13 @@ decoder[0x8a] = (buf, end) => {
 		return null;
 
 	const radios_count = buf.get('B');
-	const radio_unique_identifier = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 	const radios = [];
 
 	for (let h = 0; h < radios_count; h++) {
-		if (buf.pos() + 4 > end)
+		if (buf.pos() + 10 > end)
 			return null;
 
+		const radio_unique_identifier = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 		const sta_metrics_reporting_rcpi_threshold = buf.get('B');
 
 		if (sta_metrics_reporting_rcpi_threshold > 0xdc)
@@ -4786,6 +4783,7 @@ decoder[0x8a] = (buf, end) => {
 		const associated_wifi6_sta_status_inclusion_policy = ((bitfield & 0b00100000) == 0b00100000);
 
 		push(radios, {
+			radio_unique_identifier,
 			sta_metrics_reporting_rcpi_threshold,
 			sta_metrics_reporting_rcpi_hysteresis_margin_override,
 			ap_metrics_channel_utilization_reporting_threshold,
@@ -4797,7 +4795,6 @@ decoder[0x8a] = (buf, end) => {
 
 	return {
 		ap_metrics_reporting_interval,
-		radio_unique_identifier,
 		radios,
 	};
 };
@@ -5116,8 +5113,8 @@ decoder[0x96] = (buf, end) => {
 
 		const bssid = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 		const time_delta = buf.get('!L');
-		const estimated_downlink_mac_data_rate = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
-		const estimated_uplink_mac_data_rate = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
+		const estimated_downlink_mac_data_rate = buf.get('!L');
+		const estimated_uplink_mac_data_rate = buf.get('!L');
 		const uplink_rcpi = buf.get('B');
 
 		if (uplink_rcpi > 0xdc)
@@ -5283,6 +5280,9 @@ decoder[0x9a] = (buf, end) => {
 		return null;
 
 	const mac_address = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
+
+	buf.get(1);
+
 	const measurement_report_elements_count = buf.get('B');
 	const measurement_report_elements = [];
 
@@ -6267,6 +6267,8 @@ decoder[0xb4] = (buf, end) => {
 
 	const max_prioritization_rules = buf.get('B');
 
+	buf.get(1);
+
 	const bitfield = buf.get('B');
 	const byte_counter_unit = (bitfield >> 6) & 0b00000011;
 	const supports_prioritization = ((bitfield & 0b00100000) == 0b00100000);
@@ -6363,6 +6365,8 @@ decoder[0xb7] = (buf, end) => {
 			const r2_disallowed_status = ((bitfield & 0b00010000) == 0b00010000);
 			const multiple_bssid = ((bitfield & 0b00001000) == 0b00001000);
 			const transmitted_bssid = ((bitfield & 0b00000100) == 0b00000100);
+
+			buf.get(1);
 
 			const ssid_length = buf.get('B');
 
@@ -6748,16 +6752,12 @@ decoder[0xc8] = (buf, end) => {
 // 0xc9 - Status Code
 // Wi-Fi EasyMesh
 decoder[0xc9] = (buf, end) => {
-	if (buf.pos() + 4 > end)
+	if (buf.pos() + 2 > end)
 		return null;
 
-	const octets_count = buf.get('!H');
 	const status_code = buf.get('!H');
 
-	return {
-		octets_count,
-		status_code,
-	};
+	return status_code;
 };
 
 // 0xca - Reason Code
@@ -7068,6 +7068,7 @@ decoder[0xd6] = (buf, end) => {
 			push(channels, buf.get('B'));
 		}
 
+		buf.get(4);
 		push(opclasses, {
 			opclass,
 			channels,
@@ -7107,6 +7108,7 @@ decoder[0xd7] = (buf, end) => {
 		const power_level = buf.get('B');
 		const channel_usage_reason = buf.get('B');
 
+		buf.get(4);
 		push(usage_entries, {
 			burst_length,
 			repetitions_count,
@@ -7150,6 +7152,8 @@ decoder[0xd8] = (buf, end) => {
 	const srg_bss_color_bitmap = buf.get('!Q');
 	const srg_partial_bssid_bitmap = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 
+	buf.get(2);
+
 	return {
 		radio_unique_identifier,
 		bss_color,
@@ -7189,6 +7193,8 @@ decoder[0xd9] = (buf, end) => {
 	const srg_bss_color_bitmap = buf.get('!Q');
 	const srg_partial_bssid_bitmap = sprintf('%02x:%02x:%02x:%02x:%02x:%02x', ...buf.read('6B'));
 	const used_neighbor_bss_colors = buf.get('!Q');
+
+	buf.get(2);
 
 	return {
 		radio_unique_identifier,
@@ -7255,6 +7261,8 @@ decoder[0xdb] = (buf, end) => {
 
 		push(scs_disallowed_sta, scs_disallowed_sta_mac);
 	}
+
+	buf.get(20);
 
 	return {
 		mscs_disallowed_sta,
