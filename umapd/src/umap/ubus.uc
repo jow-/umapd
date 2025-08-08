@@ -178,8 +178,11 @@ export default {
 	},
 
 	publish: function () {
-		if (this.connect())
-			return (namespace ??= ubus.publish("umap", IUmapUbusProcedures));
+		if (this.connect()) {
+			const nsname = model.isController ? "umap" : "umap-agent";
+
+			return (namespace ??= ubus.publish(nsname, IUmapUbusProcedures));
+		}
 	},
 
 	notify: function (...args) {
