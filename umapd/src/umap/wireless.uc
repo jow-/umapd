@@ -762,6 +762,7 @@ const IWireless = {
 	},
 
 	channelToFrequency: channelToFrequency,
+	frequencyToChannel: frequencyToChannel,
 };
 
 IWireless.observeAssociationEvents();
