@@ -17,29 +17,29 @@
 const handlers = {};
 
 export default {
-    register: function(eventtype, callback) {
-        push(handlers[eventtype] ??= [], callback);
-    },
+	register: function(eventtype, callback) {
+		push(handlers[eventtype] ??= [], callback);
+	},
 
-    unregister: function(eventtype, callback) {
-        for (let i = 0; i < length(handlers[eventtype]); i++) {
-            if (handlers[eventtype][i] === callback) {
-                splice(handlers[eventtype], i, 1);
+	unregister: function(eventtype, callback) {
+		for (let i = 0; i < length(handlers[eventtype]); i++) {
+			if (handlers[eventtype][i] === callback) {
+				splice(handlers[eventtype], i, 1);
 
-                return true;
-            }
-        }
+				return true;
+			}
+		}
 
-        return false;
-    },
+		return false;
+	},
 
-    dispatch: function(eventtype, payload) {
-        if (!(eventtype in handlers))
-            return false;
+	dispatch: function(eventtype, payload) {
+		if (!(eventtype in handlers))
+			return false;
 
-        for (let fn in handlers[eventtype])
-            fn(payload);
+		for (let fn in handlers[eventtype])
+			fn(payload);
 
-        return true;
-    },
+		return true;
+	},
 };

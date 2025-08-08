@@ -19,28 +19,28 @@ import { connect as ubus_connect, error as ubus_error } from 'ubus';
 let ubusconn = null;
 
 export default {
-    connect: function () {
-        ubusconn ??= ubus_connect();
+	connect: function () {
+		ubusconn ??= ubus_connect();
 
-        return (ubusconn != null);
-    },
+		return (ubusconn != null);
+	},
 
-    error: function () {
-        return ubus_error();
-    },
+	error: function () {
+		return ubus_error();
+	},
 
-    call: function (object, method, args) {
-        if (this.connect())
-            return ubusconn.call(object, method, args);
-    },
+	call: function (object, method, args) {
+		if (this.connect())
+			return ubusconn.call(object, method, args);
+	},
 
-    subscriber: function (notify_cb, remove_cb, subscriptions) {
-        if (this.connect())
-            return ubusconn.subscriber(notify_cb, remove_cb, subscriptions);
-    },
+	subscriber: function (notify_cb, remove_cb, subscriptions) {
+		if (this.connect())
+			return ubusconn.subscriber(notify_cb, remove_cb, subscriptions);
+	},
 
-    publish: function (namespace, procedures) {
-        if (this.connect())
-            return ubusconn.publish(namespace, procedures);
-    },
+	publish: function (namespace, procedures) {
+		if (this.connect())
+			return ubusconn.publish(namespace, procedures);
+	},
 };
