@@ -3574,10 +3574,13 @@ encoder[0xdc] = (buf, tlv) => {
 
 // 0xdd - Controller Capability
 // Wi-Fi EasyMesh
-encoder[0xdd] = (buf, ki_bmi_b_counter) => {
+encoder[0xdd] = (buf, tlv) => {
+	if (type(tlv) != "object")
+		return null;
 
 	buf.put('B', 0
-		| (ki_bmi_b_counter << 7)
+		| (tlv.kib_mib_counter << 7)
+		| (tlv.early_ap_capability << 6)
 	);
 
 	return buf;
@@ -5555,7 +5558,9 @@ decoder[0xa4] = (buf, end) => {
 	const bitfield = buf.get('B');
 	const report_independent_channel_scans = ((bitfield & 0b10000000) == 0b10000000);
 
-	return report_independent_channel_scans;
+	return {
+		report_independent_channel_scans,
+	};
 };
 
 // 0xa5 - Channel Scan Capabilities
@@ -7296,9 +7301,13 @@ decoder[0xdd] = (buf, end) => {
 		return null;
 
 	const bitfield = buf.get('B');
-	const ki_bmi_b_counter = ((bitfield & 0b10000000) == 0b10000000);
+	const kib_mib_counter = ((bitfield & 0b10000000) == 0b10000000);
+	const early_ap_capability = ((bitfield & 0b01000000) == 0b01000000);
 
-	return ki_bmi_b_counter;
+	return {
+		kib_mib_counter,
+		early_ap_capability,
+	};
 };
 
 // -----------------------------------------------------------------------------
