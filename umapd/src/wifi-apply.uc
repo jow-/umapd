@@ -79,11 +79,13 @@ if (!ubus)
 
 let has_backhaul_sta = null;
 
-const new_instances = { [radio]: {} };
-const cur_instances = ubus.call('service', 'get_data', {
+const service_data = ubus.call('service', 'get_data', {
 	name: 'umap-agent',
 	type: 'wifi-iface'
-})?.['umap-agent']?.['wifi-iface'] ?? {};
+})?.['umap-agent'];
+
+const new_instances = { [radio]: {} };
+const cur_instances = service_data?.['*']?.['wifi-iface'] ?? service_data?.['wifi-iface'] ?? {};
 
 for (let state_radio, state_bsses in cur_instances) {
 	if (state_radio != radio) {
