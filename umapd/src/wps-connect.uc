@@ -8,6 +8,7 @@ import * as wlnl from 'nl80211';
 import * as socket from 'socket';
 import * as libuci from 'uci';
 import * as struct from 'struct';
+import { find_phy } from 'wifi.utils';
 
 const WPA_SOCKET_PATH = '/var/run/wps';
 
@@ -185,11 +186,11 @@ function supplicant_request(sock, cmd, timeout) {
 }
 
 function determine_phyname(radio) {
-	let iwinfo = fs.popen(`iwinfo nl80211 phyname '${replace(radio, "'", "'\\''")}'`, 'r');
-	if (!iwinfo)
-		die(`Error launching iwinfo: ${fs.error()}`);
+	let config = uci.get_all('wireless', radio);
+	if (!config)
+		die(`Radio ${radio} not found in configuration`);
 
-	return trim(iwinfo.read('line'));
+	return find_phy(config);
 }
 
 function determine_phy(radio) {

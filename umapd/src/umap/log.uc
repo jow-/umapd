@@ -14,15 +14,58 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+import * as udebug from "udebug";
 let verbosity = 0;
 
 export default {
 	setVerbosity: (v) => (verbosity = v),
 
-	debug3: function (fmt, ...args) { (verbosity > 2 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null) },
-	debug2: function (fmt, ...args) { (verbosity > 1 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null) },
-	debug: function (fmt, ...args) { (verbosity > 0 ? warn(sprintf(`[D] ${fmt}\n`, ...args)) : null) },
-	warn: function (fmt, ...args) { warn(sprintf(`[W] ${fmt}\n`, ...args)) },
-	error: function (fmt, ...args) { warn(sprintf(`[E] ${fmt}\n`, ...args)) },
-	info: function (fmt, ...args) { warn(sprintf(`[I] ${fmt}\n`, ...args)) }
+	debug_config: function (config) {
+		let enabled = +config.enabled && +config.log;
+		let size = +config.log_size;
+		if (!size)
+			size = 65536;
+		let entries = +config.log_entries;
+		if (!entries)
+			entries = 1024;
+
+		if (this.debug_ring && (this.debug_size != size || this.debug_entries != entries)) {
+			this.debug_ring.close();
+			delete this.debug_ring;
+		}
+
+		if (!!this.debug_ring == !!enabled)
+			return;
+
+		if (enabled) {
+			let name = config.prefix + " log";
+			this.debug_ring = udebug.create_ring({
+				name, size, entries
+			});
+		} else {
+			this.debug_ring.close();
+			delete this.debug_ring;
+		}
+	},
+	cond_warn: function (cond, prefix, fmt, ...args) {
+		if (!cond && !this.debug_ring)
+			return;
+
+		let msg = sprintf(`${prefix} ${fmt}`, ...args);
+		if (this.debug_ring)
+			this.debug_ring.add(msg);
+		if (cond)
+			warn(msg + "\n");
+	},
+	debug3: function (fmt, ...args) { this.cond_warn(verbosity > 2, '[D] ', fmt, ...args) },
+	debug2: function (fmt, ...args) { this.cond_warn(verbosity > 1, '[D] ', fmt, ...args) },
+	debug: function (fmt, ...args) { this.cond_warn(verbosity > 0, '[D] ', fmt, ...args) },
+	warn: function (fmt, ...args) { this.cond_warn(true, '[W] ', fmt, ...args) },
+	error: function (fmt, ...args) { this.cond_warn(true, '[E] ', fmt, ...args) },
+	info: function (fmt, ...args) { this.cond_warn(true, '[I] ', fmt, ...args) },
+	exception: function(e) {
+		let lines = split(`Exception: ${e}\n${e.stacktrace[0].context}`, '\n');
+		for (let line in lines)
+			this.error('%s', line);
+	}
 };
