@@ -445,7 +445,9 @@ const IProtoAutoConf = {
 
 			// TODO: DPP Chirp
 
-			reply.add_tlv(defs.TLV_CONTROLLER_CAPABILITY, true);
+			reply.add_tlv(defs.TLV_CONTROLLER_CAPABILITY, {
+				kib_mib_counter: true,
+			});
 
 			//reply.send(i1905lif.i1905sock, dstmac, srcmac);
 			reply.send(i1905lif.i1905sock, model.address, sender.al_address);
