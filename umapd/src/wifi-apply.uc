@@ -85,7 +85,7 @@ const service_data = ubus.call('service', 'get_data', {
 })?.['umap-agent'];
 
 const new_instances = { [radio]: {} };
-const cur_instances = service_data?.['*']?.['wifi-iface'] ?? service_data?.['wifi-iface'] ?? {};
+const cur_instances = service_data?.['agent']?.['wifi-iface'] ?? {};
 
 for (let state_radio, state_bsses in cur_instances) {
 	if (state_radio != radio) {
@@ -189,7 +189,13 @@ for (let bss in sort(settings, bss_cmp)) {
 if (!equal(cur_instances, new_instances)) {
 	ubus.call('service', 'set', {
 		name: 'umap-agent',
-		data: { 'wifi-iface': new_instances }
+		instances: {
+			instance1: {
+				data: {
+					'wifi-iface': new_instances
+				}
+			}
+		}
 	});
 
 	ubus.call('network', 'reload');
