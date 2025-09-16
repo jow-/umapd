@@ -190,7 +190,7 @@ if (!equal(cur_instances, new_instances)) {
 	ubus.call('service', 'set', {
 		name: 'umap-agent',
 		instances: {
-			instance1: {
+			agent: {
 				data: {
 					'wifi-iface': new_instances
 				}
