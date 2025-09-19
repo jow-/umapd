@@ -119,7 +119,8 @@ const IAgentSession = {
 			supports_prioritization: false,
 			max_prioritization_rules: 0,
 			supports_dpp_onboarding: false,
-			supports_traffic_separation: false
+			supports_traffic_separation: false,
+			max_unique_vids: 0
 		});
 		msg.add_tlv(defs.TLV_AP_RADIO_ADVANCED_CAPABILITIES, {
 			radio_unique_identifier: this.radio.address,
