@@ -1254,6 +1254,10 @@ model = proto({
 				access(`/sys/class/net/${devname}/bridge`))
 				continue;
 
+			// Skip non-ethernet type devices
+			if (+readfile(`/sys/class/net/${devname}/type`) != 1)
+				continue;
+
 			if (addr < mac)
 				mac = addr;
 		}
